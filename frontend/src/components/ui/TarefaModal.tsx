@@ -1,11 +1,12 @@
 import { X } from 'lucide-react';
-import type { Prioridade, Projeto, Status, TarefaForm } from '../../types';
+import type { Prioridade, Projeto, Status, TarefaForm, Usuario } from '../../types';
 
 interface TarefaModalProps {
   open: boolean;
   editing: boolean;
   form: TarefaForm;
   projetos: Projeto[];
+  usuarios: Usuario[];
   saving: boolean;
   onClose: () => void;
   onSave: () => void;
@@ -13,7 +14,7 @@ interface TarefaModalProps {
 }
 
 export default function TarefaModal({
-  open, editing, form, projetos, saving, onClose, onSave, onChange,
+  open, editing, form, projetos, usuarios, saving, onClose, onSave, onChange,
 }: TarefaModalProps) {
   if (!open) return null;
 
@@ -54,7 +55,15 @@ export default function TarefaModal({
             </div>
             <div className="form-group">
               <label>Responsável</label>
-              <input value={form.responsavel} onChange={(e) => onChange('responsavel', e.target.value)} />
+              <select
+                value={form.id_responsavel ?? ''}
+                onChange={(e) => onChange('id_responsavel', e.target.value ? Number(e.target.value) : null)}
+              >
+                <option value="">Selecione...</option>
+                {usuarios.map((u) => (
+                  <option key={u.id_usuario} value={u.id_usuario}>{u.nome}</option>
+                ))}
+              </select>
             </div>
             <div className="form-group">
               <label>Prazo</label>

@@ -8,11 +8,11 @@ export interface Tarefa {
   prioridade: Prioridade;
   status: Status;
   responsavel: string;
+  id_responsavel: number | null;
   prazo: string;
   projeto_id: number | null;
   projeto_nome?: string;
   created_at?: string;
-  updated_at?: string;
 }
 
 export interface TarefaForm {
@@ -20,13 +20,18 @@ export interface TarefaForm {
   descricao: string;
   prioridade: Prioridade;
   status: Status;
-  responsavel: string;
+  id_responsavel: number | null;
   prazo: string;
   projeto_id: number | null;
 }
 
 export interface Projeto {
   id: number;
+  nome: string;
+}
+
+export interface Usuario {
+  id_usuario: number;
   nome: string;
 }
 

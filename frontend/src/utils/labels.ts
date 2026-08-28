@@ -84,7 +84,7 @@ export const emptyForm: TarefaForm = {
   descricao: '',
   prioridade: 'media',
   status: 'pendente',
-  responsavel: '',
+  id_responsavel: null,
   prazo: '',
   projeto_id: null,
 };
@@ -95,7 +95,7 @@ export function tarefaToForm(t: Tarefa): TarefaForm {
     descricao: t.descricao || '',
     prioridade: t.prioridade,
     status: t.status,
-    responsavel: t.responsavel,
+    id_responsavel: t.id_responsavel,
     prazo: t.prazo.split('T')[0],
     projeto_id: t.projeto_id,
   };

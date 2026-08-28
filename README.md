@@ -28,7 +28,8 @@ Crud_Estágio/
 │       ├── services/    # API (Axios)
 │       └── types/       # Tipagens TypeScript
 └── database/
-    └── schema.sql       # Script SQL completo
+    ├── schema.sql       # Script SQL completo (estrutura, baseado no DER)
+    └── seed.sql         # Dados de exemplo (opcional, para demonstração)
 ```
 
 ## Pré-requisitos
@@ -40,13 +41,24 @@ Crud_Estágio/
 
 ### 1. Banco de Dados
 
-Execute o script SQL no MySQL:
+Execute o script de estrutura e, se quiser dados de exemplo para demonstração, o seed:
 
 ```bash
-mysql -u root -p < database/schema.sql
+mysql -u root -p --default-character-set=utf8mb4 < database/schema.sql
+mysql -u root -p --default-character-set=utf8mb4 < database/seed.sql
 ```
 
-Ou importe manualmente o arquivo `database/schema.sql` via MySQL Workbench / phpMyAdmin.
+> No Windows, o cliente `mysql` costuma usar a codepage do console em vez de
+> UTF-8 por padrão, o que corrompe acentos (nomes, descrições) de forma
+> silenciosa durante a importação. A flag `--default-character-set=utf8mb4`
+> evita isso — não pule esse parâmetro.
+
+Ou importe manualmente os arquivos via MySQL Workbench / phpMyAdmin, na mesma ordem.
+
+> O banco criado chama-se `sgtp` (schema DER, normalizado com tabela `usuario`,
+> chaves estrangeiras e trilha de auditoria em `historico_atividade`). Se você
+> tinha um banco `sgtp_db` de uma versão anterior, pode apagá-lo depois de
+> confirmar que a aplicação está funcionando com o `sgtp`.
 
 ### 2. Backend
 
@@ -63,7 +75,7 @@ DB_HOST=localhost
 DB_PORT=3306
 DB_USER=root
 DB_PASSWORD=sua_senha
-DB_NAME=sgtp_db
+DB_NAME=sgtp
 ```
 
 Inicie o servidor:
@@ -96,6 +108,7 @@ O frontend estará disponível em `http://localhost:5173`.
 | GET    | /api/tarefas/dashboard | Dados do dashboard    |
 | GET    | /api/tarefas/relatorios | Dados dos relatórios |
 | GET    | /api/tarefas/projetos  | Listar projetos ativos |
+| GET    | /api/usuarios          | Listar usuários ativos (para atribuir responsável) |
 | GET    | /api/health           | Health check           |
 
 ### Filtros (GET /api/tarefas)

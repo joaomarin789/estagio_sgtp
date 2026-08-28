@@ -1,74 +1,117 @@
 const pool = require('../config/db');
 
+const PRIORIDADE_TAREFA_TO_DB = { baixa: 'BAIXA', media: 'MEDIA', alta: 'ALTA', critica: 'CRITICA' };
+const PRIORIDADE_TAREFA_TO_APP = { BAIXA: 'baixa', MEDIA: 'media', ALTA: 'alta', CRITICA: 'critica' };
+const STATUS_TAREFA_TO_DB = { pendente: 'PENDENTE', em_andamento: 'EM_ANDAMENTO', concluida: 'CONCLUIDA', bloqueada: 'BLOQUEADA' };
+const STATUS_TAREFA_TO_APP = { PENDENTE: 'pendente', EM_ANDAMENTO: 'em_andamento', CONCLUIDA: 'concluida', BLOQUEADA: 'bloqueada' };
+const STATUS_PROJETO_TO_APP = {
+  NAO_INICIADO: 'ativo',
+  EM_ANDAMENTO: 'ativo',
+  PAUSADO: 'pausado',
+  CONCLUIDO: 'concluido',
+  CANCELADO: 'cancelado',
+};
+
+function mapTarefaRow(row) {
+  return {
+    ...row,
+    prioridade: PRIORIDADE_TAREFA_TO_APP[row.prioridade],
+    status: STATUS_TAREFA_TO_APP[row.status],
+  };
+}
+
+function mapProjetoPortfolioRow(row) {
+  return { ...row, status: STATUS_PROJETO_TO_APP[row.status] };
+}
+
+const TAREFA_SELECT = `
+  SELECT t.id_tarefa AS id, t.titulo, t.descricao, t.prioridade, t.status, t.prazo,
+         t.id_projeto AS projeto_id, t.id_responsavel, t.data_criacao AS created_at,
+         u.nome AS responsavel, p.nome AS projeto_nome
+  FROM tarefa t
+  LEFT JOIN usuario u ON t.id_responsavel = u.id_usuario
+  LEFT JOIN projeto p ON t.id_projeto = p.id_projeto
+`;
+
 const TarefaModel = {
   async findAll(filtros = {}) {
-    let query = `
-      SELECT t.*, p.nome AS projeto_nome
-      FROM tarefas t
-      LEFT JOIN projetos p ON t.projeto_id = p.id
-      WHERE 1=1
-    `;
+    let query = `${TAREFA_SELECT} WHERE 1=1`;
     const params = [];
 
     if (filtros.busca) {
-      query += ` AND (t.titulo LIKE ? OR t.descricao LIKE ? OR t.responsavel LIKE ?)`;
+      query += ` AND (t.titulo LIKE ? OR t.descricao LIKE ? OR u.nome LIKE ?)`;
       const termo = `%${filtros.busca}%`;
       params.push(termo, termo, termo);
     }
     if (filtros.status) {
       query += ` AND t.status = ?`;
-      params.push(filtros.status);
+      params.push(STATUS_TAREFA_TO_DB[filtros.status]);
     }
     if (filtros.prioridade) {
       query += ` AND t.prioridade = ?`;
-      params.push(filtros.prioridade);
+      params.push(PRIORIDADE_TAREFA_TO_DB[filtros.prioridade]);
     }
     if (filtros.responsavel) {
-      query += ` AND t.responsavel LIKE ?`;
+      query += ` AND u.nome LIKE ?`;
       params.push(`%${filtros.responsavel}%`);
     }
 
-    query += ` ORDER BY 
-      FIELD(t.prioridade, 'critica', 'alta', 'media', 'baixa'),
+    query += ` ORDER BY
+      FIELD(t.prioridade, 'CRITICA', 'ALTA', 'MEDIA', 'BAIXA'),
       t.prazo ASC`;
 
     const [rows] = await pool.execute(query, params);
-    return rows;
+    return rows.map(mapTarefaRow);
   },
 
   async findById(id) {
-    const [rows] = await pool.execute(
-      `SELECT t.*, p.nome AS projeto_nome
-       FROM tarefas t
-       LEFT JOIN projetos p ON t.projeto_id = p.id
-       WHERE t.id = ?`,
-      [id]
-    );
-    return rows[0];
+    const [rows] = await pool.execute(`${TAREFA_SELECT} WHERE t.id_tarefa = ?`, [id]);
+    return rows[0] ? mapTarefaRow(rows[0]) : undefined;
   },
 
   async create(data) {
-    const { titulo, descricao, prioridade, status, responsavel, prazo, projeto_id } = data;
+    const { titulo, descricao, prioridade, status, id_responsavel, prazo, projeto_id } = data;
     const [result] = await pool.execute(
-      `INSERT INTO tarefas (titulo, descricao, prioridade, status, responsavel, prazo, projeto_id)
+      `INSERT INTO tarefa (titulo, descricao, prioridade, status, prazo, id_projeto, id_responsavel)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [titulo, descricao || null, prioridade, status, responsavel, prazo, projeto_id || null]
+      [
+        titulo,
+        descricao || null,
+        PRIORIDADE_TAREFA_TO_DB[prioridade],
+        STATUS_TAREFA_TO_DB[status],
+        prazo,
+        projeto_id || null,
+        id_responsavel,
+      ]
     );
     return this.findById(result.insertId);
   },
 
   async update(id, data) {
-    const { titulo, descricao, prioridade, status, responsavel, prazo, projeto_id } = data;
+    const { titulo, descricao, prioridade, status, id_responsavel, prazo, projeto_id } = data;
+    const dbStatus = STATUS_TAREFA_TO_DB[status];
     await pool.execute(
-      `UPDATE tarefas SET titulo=?, descricao=?, prioridade=?, status=?, responsavel=?, prazo=?, projeto_id=?
-       WHERE id=?`,
-      [titulo, descricao || null, prioridade, status, responsavel, prazo, projeto_id || null, id]
+      `UPDATE tarefa
+       SET titulo=?, descricao=?, prioridade=?, status=?, prazo=?, id_projeto=?, id_responsavel=?,
+           data_conclusao = CASE WHEN ? = 'CONCLUIDA' THEN COALESCE(data_conclusao, NOW()) ELSE NULL END
+       WHERE id_tarefa=?`,
+      [
+        titulo,
+        descricao || null,
+        PRIORIDADE_TAREFA_TO_DB[prioridade],
+        dbStatus,
+        prazo,
+        projeto_id || null,
+        id_responsavel,
+        dbStatus,
+        id,
+      ]
     );
     return this.findById(id);
   },
 
   async delete(id) {
-    const [result] = await pool.execute('DELETE FROM tarefas WHERE id = ?', [id]);
+    const [result] = await pool.execute('DELETE FROM tarefa WHERE id_tarefa = ?', [id]);
     return result.affectedRows > 0;
   },
 
@@ -76,61 +119,78 @@ const TarefaModel = {
     const [totais] = await pool.execute(`
       SELECT
         COUNT(*) AS total_tarefas,
-        SUM(CASE WHEN status = 'concluida' THEN 1 ELSE 0 END) AS tarefas_concluidas,
-        SUM(CASE WHEN status = 'bloqueada' THEN 1 ELSE 0 END) AS tarefas_bloqueadas,
-        SUM(CASE WHEN status = 'em_andamento' THEN 1 ELSE 0 END) AS tarefas_em_andamento,
-        SUM(CASE WHEN status = 'pendente' THEN 1 ELSE 0 END) AS tarefas_pendentes
-      FROM tarefas
+        SUM(CASE WHEN status = 'CONCLUIDA' THEN 1 ELSE 0 END) AS tarefas_concluidas,
+        SUM(CASE WHEN status = 'BLOQUEADA' THEN 1 ELSE 0 END) AS tarefas_bloqueadas,
+        SUM(CASE WHEN status = 'EM_ANDAMENTO' THEN 1 ELSE 0 END) AS tarefas_em_andamento,
+        SUM(CASE WHEN status = 'PENDENTE' THEN 1 ELSE 0 END) AS tarefas_pendentes
+      FROM tarefa
     `);
 
     const [projetos] = await pool.execute(`
-      SELECT COUNT(*) AS projetos_ativos FROM projetos WHERE status = 'ativo'
+      SELECT COUNT(*) AS projetos_ativos FROM projeto WHERE status = 'EM_ANDAMENTO'
     `);
 
-    const [entregasCriticas] = await pool.execute(`
-      SELECT t.id, t.titulo, t.responsavel, t.prazo, t.prioridade, p.nome AS projeto_nome
-      FROM tarefas t
-      LEFT JOIN projetos p ON t.projeto_id = p.id
-      WHERE t.prioridade IN ('critica', 'alta')
-        AND t.status NOT IN ('concluida')
+    const [entregasCriticasRaw] = await pool.execute(`
+      SELECT t.id_tarefa AS id, t.titulo, u.nome AS responsavel, t.prazo, t.prioridade, p.nome AS projeto_nome
+      FROM tarefa t
+      LEFT JOIN usuario u ON t.id_responsavel = u.id_usuario
+      LEFT JOIN projeto p ON t.id_projeto = p.id_projeto
+      WHERE t.prioridade IN ('CRITICA', 'ALTA')
+        AND t.status NOT IN ('CONCLUIDA')
         AND t.prazo <= DATE_ADD(CURDATE(), INTERVAL 14 DAY)
       ORDER BY t.prazo ASC
       LIMIT 5
     `);
+    const entregasCriticas = entregasCriticasRaw.map((r) => ({
+      ...r,
+      prioridade: PRIORIDADE_TAREFA_TO_APP[r.prioridade],
+    }));
 
-    const [pipeline] = await pool.execute(`
+    const [pipelineRaw] = await pool.execute(`
       SELECT status, COUNT(*) AS quantidade
-      FROM tarefas
+      FROM tarefa
       GROUP BY status
     `);
+    const pipeline = pipelineRaw.map((r) => ({ ...r, status: STATUS_TAREFA_TO_APP[r.status] }));
 
     const [capacidade] = await pool.execute(`
-      SELECT responsavel,
+      SELECT u.nome AS responsavel,
         COUNT(*) AS total,
-        SUM(CASE WHEN status = 'em_andamento' THEN 1 ELSE 0 END) AS em_andamento,
-        SUM(CASE WHEN status = 'concluida' THEN 1 ELSE 0 END) AS concluidas
-      FROM tarefas
-      GROUP BY responsavel
+        SUM(CASE WHEN t.status = 'EM_ANDAMENTO' THEN 1 ELSE 0 END) AS em_andamento,
+        SUM(CASE WHEN t.status = 'CONCLUIDA' THEN 1 ELSE 0 END) AS concluidas
+      FROM tarefa t
+      JOIN usuario u ON t.id_responsavel = u.id_usuario
+      GROUP BY u.id_usuario, u.nome
       ORDER BY total DESC
       LIMIT 6
     `);
 
-    const [atividades] = await pool.execute(`
-      SELECT a.*, t.titulo AS tarefa_titulo
-      FROM atividades a
-      LEFT JOIN tarefas t ON a.tarefa_id = t.id
-      ORDER BY a.created_at DESC
+    const [atividadesRaw] = await pool.execute(`
+      SELECT h.id_historico AS id, h.id_tarefa AS tarefa_id, h.acao, h.descricao, u.nome AS usuario,
+             h.data_hora AS created_at, t.titulo AS tarefa_titulo
+      FROM historico_atividade h
+      LEFT JOIN tarefa t ON h.id_tarefa = t.id_tarefa
+      LEFT JOIN usuario u ON h.id_usuario = u.id_usuario
+      ORDER BY h.data_hora DESC
       LIMIT 8
     `);
+    const ACAO_LABELS = {
+      CRIACAO: 'Criação',
+      EDICAO: 'Edição',
+      EXCLUSAO: 'Exclusão',
+      MUDANCA_STATUS: 'Mudança de status',
+      ATRIBUICAO: 'Atribuição',
+    };
+    const atividades = atividadesRaw.map((r) => ({ ...r, acao: ACAO_LABELS[r.acao] || r.acao }));
 
     const [produtividade] = await pool.execute(`
       SELECT
-        DATE_FORMAT(updated_at, '%Y-%m') AS mes,
-        SUM(CASE WHEN status = 'concluida' THEN 1 ELSE 0 END) AS concluidas,
+        DATE_FORMAT(data_criacao, '%Y-%m') AS mes,
+        SUM(CASE WHEN status = 'CONCLUIDA' THEN 1 ELSE 0 END) AS concluidas,
         COUNT(*) AS total
-      FROM tarefas
-      WHERE updated_at >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)
-      GROUP BY DATE_FORMAT(updated_at, '%Y-%m')
+      FROM tarefa
+      WHERE data_criacao >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)
+      GROUP BY DATE_FORMAT(data_criacao, '%Y-%m')
       ORDER BY mes ASC
     `);
 
@@ -149,55 +209,60 @@ const TarefaModel = {
     const [indicadores] = await pool.execute(`
       SELECT
         COUNT(*) AS total_tarefas,
-        SUM(CASE WHEN status = 'concluida' THEN 1 ELSE 0 END) AS concluidas,
-        SUM(CASE WHEN status = 'bloqueada' THEN 1 ELSE 0 END) AS bloqueadas,
-        SUM(CASE WHEN status = 'em_andamento' THEN 1 ELSE 0 END) AS em_andamento,
-        SUM(CASE WHEN prazo < CURDATE() AND status != 'concluida' THEN 1 ELSE 0 END) AS atrasadas,
-        ROUND(SUM(CASE WHEN status = 'concluida' THEN 1 ELSE 0 END) / COUNT(*) * 100, 1) AS taxa_conclusao
-      FROM tarefas
+        SUM(CASE WHEN status = 'CONCLUIDA' THEN 1 ELSE 0 END) AS concluidas,
+        SUM(CASE WHEN status = 'BLOQUEADA' THEN 1 ELSE 0 END) AS bloqueadas,
+        SUM(CASE WHEN status = 'EM_ANDAMENTO' THEN 1 ELSE 0 END) AS em_andamento,
+        SUM(CASE WHEN prazo < CURDATE() AND status != 'CONCLUIDA' THEN 1 ELSE 0 END) AS atrasadas,
+        ROUND(SUM(CASE WHEN status = 'CONCLUIDA' THEN 1 ELSE 0 END) / COUNT(*) * 100, 1) AS taxa_conclusao
+      FROM tarefa
     `);
 
     const [leadTime] = await pool.execute(`
       SELECT
-        ROUND(AVG(DATEDIFF(updated_at, created_at)), 1) AS lead_time_medio
-      FROM tarefas
-      WHERE status = 'concluida'
+        ROUND(AVG(DATEDIFF(data_conclusao, data_criacao)), 1) AS lead_time_medio
+      FROM tarefa
+      WHERE status = 'CONCLUIDA' AND data_conclusao IS NOT NULL
     `);
 
     const [sla] = await pool.execute(`
       SELECT
         ROUND(
-          SUM(CASE WHEN status = 'concluida' AND updated_at <= prazo THEN 1 ELSE 0 END) /
-          NULLIF(SUM(CASE WHEN status = 'concluida' THEN 1 ELSE 0 END), 0) * 100, 1
+          SUM(CASE WHEN status = 'CONCLUIDA' AND DATE(data_conclusao) <= prazo THEN 1 ELSE 0 END) /
+          NULLIF(SUM(CASE WHEN status = 'CONCLUIDA' THEN 1 ELSE 0 END), 0) * 100, 1
         ) AS sla_percentual
-      FROM tarefas
+      FROM tarefa
     `);
 
     const [eficiencia] = await pool.execute(`
       SELECT
-        DATE_FORMAT(created_at, '%Y-%m') AS mes,
+        DATE_FORMAT(data_criacao, '%Y-%m') AS mes,
         COUNT(*) AS criadas,
-        SUM(CASE WHEN status = 'concluida' THEN 1 ELSE 0 END) AS concluidas
-      FROM tarefas
-      WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)
-      GROUP BY DATE_FORMAT(created_at, '%Y-%m')
+        SUM(CASE WHEN status = 'CONCLUIDA' THEN 1 ELSE 0 END) AS concluidas
+      FROM tarefa
+      WHERE data_criacao >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)
+      GROUP BY DATE_FORMAT(data_criacao, '%Y-%m')
       ORDER BY mes ASC
     `);
 
-    const [porPrioridade] = await pool.execute(`
+    const [porPrioridadeRaw] = await pool.execute(`
       SELECT prioridade, COUNT(*) AS quantidade,
-        SUM(CASE WHEN status = 'concluida' THEN 1 ELSE 0 END) AS concluidas
-      FROM tarefas
+        SUM(CASE WHEN status = 'CONCLUIDA' THEN 1 ELSE 0 END) AS concluidas
+      FROM tarefa
       GROUP BY prioridade
     `);
+    const porPrioridade = porPrioridadeRaw.map((r) => ({
+      ...r,
+      prioridade: PRIORIDADE_TAREFA_TO_APP[r.prioridade],
+    }));
 
     const [porResponsavel] = await pool.execute(`
-      SELECT responsavel,
+      SELECT u.nome AS responsavel,
         COUNT(*) AS total,
-        SUM(CASE WHEN status = 'concluida' THEN 1 ELSE 0 END) AS concluidas,
-        ROUND(SUM(CASE WHEN status = 'concluida' THEN 1 ELSE 0 END) / COUNT(*) * 100, 1) AS taxa
-      FROM tarefas
-      GROUP BY responsavel
+        SUM(CASE WHEN t.status = 'CONCLUIDA' THEN 1 ELSE 0 END) AS concluidas,
+        ROUND(SUM(CASE WHEN t.status = 'CONCLUIDA' THEN 1 ELSE 0 END) / COUNT(*) * 100, 1) AS taxa
+      FROM tarefa t
+      JOIN usuario u ON t.id_responsavel = u.id_usuario
+      GROUP BY u.id_usuario, u.nome
       ORDER BY total DESC
     `);
 
@@ -221,33 +286,36 @@ const TarefaModel = {
     };
   },
 
-  async registrarAtividade(tarefaId, acao, descricao, usuario) {
+  async registrarAtividade({ tarefaId, acao, descricao, idUsuario, campoAlterado = null, valorAnterior = null, valorNovo = null }) {
     await pool.execute(
-      `INSERT INTO atividades (tarefa_id, acao, descricao, usuario) VALUES (?, ?, ?, ?)`,
-      [tarefaId, acao, descricao, usuario]
+      `INSERT INTO historico_atividade (acao, campo_alterado, valor_anterior, valor_novo, descricao, id_usuario, id_tarefa)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [acao, campoAlterado, valorAnterior, valorNovo, descricao, idUsuario, tarefaId]
     );
   },
 
   async getProjetos() {
     const [rows] = await pool.execute(
-      `SELECT id, nome FROM projetos WHERE status = 'ativo' ORDER BY nome`
+      `SELECT id_projeto AS id, nome FROM projeto WHERE status = 'EM_ANDAMENTO' ORDER BY nome`
     );
     return rows;
   },
 
   async getPortfolioProjetos() {
     const [rows] = await pool.execute(`
-      SELECT p.*,
-        COUNT(t.id) AS total_tarefas,
-        SUM(CASE WHEN t.status = 'concluida' THEN 1 ELSE 0 END) AS tarefas_concluidas,
-        SUM(CASE WHEN t.status = 'bloqueada' THEN 1 ELSE 0 END) AS tarefas_bloqueadas,
-        SUM(CASE WHEN t.prioridade IN ('alta','critica') AND t.status NOT IN ('concluida') THEN 1 ELSE 0 END) AS tarefas_risco
-      FROM projetos p
-      LEFT JOIN tarefas t ON t.projeto_id = p.id
-      GROUP BY p.id
-      ORDER BY p.status = 'ativo' DESC, p.nome ASC
+      SELECT p.id_projeto AS id, p.nome, p.descricao, p.status, u.nome AS responsavel,
+             p.data_inicio, p.data_termino_prevista AS data_fim,
+             COUNT(t.id_tarefa) AS total_tarefas,
+             SUM(CASE WHEN t.status = 'CONCLUIDA' THEN 1 ELSE 0 END) AS tarefas_concluidas,
+             SUM(CASE WHEN t.status = 'BLOQUEADA' THEN 1 ELSE 0 END) AS tarefas_bloqueadas,
+             SUM(CASE WHEN t.prioridade IN ('ALTA', 'CRITICA') AND t.status NOT IN ('CONCLUIDA') THEN 1 ELSE 0 END) AS tarefas_risco
+      FROM projeto p
+      JOIN usuario u ON p.id_responsavel = u.id_usuario
+      LEFT JOIN tarefa t ON t.id_projeto = p.id_projeto
+      GROUP BY p.id_projeto, p.nome, p.descricao, p.status, u.nome, p.data_inicio, p.data_termino_prevista
+      ORDER BY p.status = 'EM_ANDAMENTO' DESC, p.nome ASC
     `);
-    return rows;
+    return rows.map(mapProjetoPortfolioRow);
   },
 };
 

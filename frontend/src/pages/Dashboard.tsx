@@ -188,7 +188,7 @@ export default function Dashboard() {
             <div className="card-head"><h3>Log operacional</h3></div>
             <ul className="activity-log card-body">
               {data.atividades_recentes.map((a) => {
-                const cls = a.acao === 'Bloqueio' ? 'danger' : a.acao === 'Conclusão' ? 'ok' : '';
+                const cls = a.descricao?.includes('BLOQUEADA') ? 'danger' : a.descricao?.includes('CONCLUIDA') ? 'ok' : '';
                 return (
                   <li key={a.id}>
                     <span className="time">{formatDateTime(a.created_at).slice(11, 16)}</span>

@@ -32,9 +32,9 @@ const TarefaController = {
 
   async criar(req, res) {
     try {
-      const { titulo, descricao, prioridade, status, responsavel, prazo, projeto_id } = req.body;
+      const { titulo, descricao, prioridade, status, id_responsavel, prazo, projeto_id } = req.body;
 
-      if (!titulo || !responsavel || !prazo) {
+      if (!titulo || !id_responsavel || !prazo) {
         return res.status(400).json({ erro: 'Título, responsável e prazo são obrigatórios' });
       }
 
@@ -43,17 +43,17 @@ const TarefaController = {
         descricao,
         prioridade: prioridade || 'media',
         status: status || 'pendente',
-        responsavel,
+        id_responsavel,
         prazo,
         projeto_id,
       });
 
-      await TarefaModel.registrarAtividade(
-        tarefa.id,
-        'Criação',
-        `Tarefa "${titulo}" criada`,
-        responsavel
-      );
+      await TarefaModel.registrarAtividade({
+        tarefaId: tarefa.id,
+        acao: 'CRIACAO',
+        descricao: `Tarefa "${titulo}" criada`,
+        idUsuario: id_responsavel,
+      });
 
       res.status(201).json(tarefa);
     } catch (error) {
@@ -70,9 +70,9 @@ const TarefaController = {
         return res.status(404).json({ erro: 'Tarefa não encontrada' });
       }
 
-      const { titulo, descricao, prioridade, status, responsavel, prazo, projeto_id } = req.body;
+      const { titulo, descricao, prioridade, status, id_responsavel, prazo, projeto_id } = req.body;
 
-      if (!titulo || !responsavel || !prazo) {
+      if (!titulo || !id_responsavel || !prazo) {
         return res.status(400).json({ erro: 'Título, responsável e prazo são obrigatórios' });
       }
 
@@ -81,17 +81,23 @@ const TarefaController = {
         descricao,
         prioridade,
         status,
-        responsavel,
+        id_responsavel,
         prazo,
         projeto_id,
       });
 
-      await TarefaModel.registrarAtividade(
-        id,
-        'Atualização',
-        `Tarefa "${titulo}" atualizada - Status: ${status}`,
-        responsavel
-      );
+      const mudouStatus = existente.status !== status;
+      await TarefaModel.registrarAtividade({
+        tarefaId: id,
+        acao: mudouStatus ? 'MUDANCA_STATUS' : 'EDICAO',
+        descricao: mudouStatus
+          ? `Tarefa "${titulo}" — status alterado para ${status.toUpperCase()}`
+          : `Tarefa "${titulo}" atualizada`,
+        idUsuario: id_responsavel,
+        campoAlterado: mudouStatus ? 'status' : null,
+        valorAnterior: mudouStatus ? existente.status.toUpperCase() : null,
+        valorNovo: mudouStatus ? status.toUpperCase() : null,
+      });
 
       res.json(tarefa);
     } catch (error) {

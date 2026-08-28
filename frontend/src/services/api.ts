@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { DashboardStats, Projeto, ProjetoPortfolio, RelatoriosData, Tarefa, TarefaForm } from '../types';
+import type { DashboardStats, Projeto, ProjetoPortfolio, RelatoriosData, Tarefa, TarefaForm, Usuario } from '../types';
 
 const api = axios.create({
   baseURL: '/api',
@@ -33,6 +33,10 @@ export const tarefaService = {
 
   portfolioProjetos: () =>
     api.get<ProjetoPortfolio[]>('/tarefas/portfolio/projetos').then((r) => r.data),
+};
+
+export const usuarioService = {
+  listar: () => api.get<Usuario[]>('/usuarios').then((r) => r.data),
 };
 
 export default api;

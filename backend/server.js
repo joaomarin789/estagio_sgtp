@@ -4,6 +4,7 @@ const express = require('express');
 const cors = require('cors');
 
 const tarefaRoutes = require('./routes/tarefaRoutes');
+const usuarioRoutes = require('./routes/usuarioRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -16,6 +17,7 @@ app.get('/api/health', (_req, res) => {
 });
 
 app.use('/api/tarefas', tarefaRoutes);
+app.use('/api/usuarios', usuarioRoutes);
 
 app.use((_req, res) => {
   res.status(404).json({ erro: 'Rota não encontrada' });

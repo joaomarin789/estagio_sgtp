@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Plus, X } from 'lucide-react';
-import { tarefaService } from '../services/api';
-import type { Projeto, Tarefa, TarefaForm } from '../types';
+import { tarefaService, usuarioService } from '../services/api';
+import type { Projeto, Tarefa, TarefaForm, Usuario } from '../types';
 import TaskCard from '../components/ui/TaskCard';
 import TarefaModal from '../components/ui/TarefaModal';
 import { emptyForm, syncTime, tarefaToForm } from '../utils/labels';
@@ -19,6 +19,7 @@ const prioChips = ['', 'critica', 'alta', 'media', 'baixa'];
 export default function Tarefas() {
   const [tarefas, setTarefas] = useState<Tarefa[]>([]);
   const [projetos, setProjetos] = useState<Projeto[]>([]);
+  const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [atividades, setAtividades] = useState<{ id: number; descricao: string; created_at: string; acao: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -40,13 +41,15 @@ export default function Tarefas() {
       if (filtros.status) params.status = filtros.status;
       if (filtros.prioridade) params.prioridade = filtros.prioridade;
 
-      const [tarefasData, projetosData, dash] = await Promise.all([
+      const [tarefasData, projetosData, usuariosData, dash] = await Promise.all([
         tarefaService.listar(params),
         tarefaService.projetos(),
+        usuarioService.listar(),
         tarefaService.dashboard(),
       ]);
       setTarefas(tarefasData);
       setProjetos(projetosData);
+      setUsuarios(usuariosData);
       setAtividades(dash.atividades_recentes);
     } catch {
       setError('Erro ao carregar tarefas.');
@@ -61,7 +64,7 @@ export default function Tarefas() {
   const abrirEditar = (t: Tarefa) => { setEditingId(t.id); setForm(tarefaToForm(t)); setModalOpen(true); };
 
   const salvar = async () => {
-    if (!form.titulo || !form.responsavel || !form.prazo) {
+    if (!form.titulo || !form.id_responsavel || !form.prazo) {
       setError('Preencha título, responsável e prazo.');
       return;
     }
@@ -247,6 +250,7 @@ export default function Tarefas() {
         editing={!!editingId}
         form={form}
         projetos={projetos}
+        usuarios={usuarios}
         saving={saving}
         onClose={() => setModalOpen(false)}
         onSave={salvar}
