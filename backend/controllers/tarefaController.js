@@ -151,16 +151,6 @@ const TarefaController = {
       res.status(500).json({ erro: 'Erro interno ao buscar projetos' });
     }
   },
-
-  async portfolioProjetos(req, res) {
-    try {
-      const projetos = await TarefaModel.getPortfolioProjetos();
-      res.json(projetos);
-    } catch (error) {
-      console.error('Erro ao buscar portfólio:', error);
-      res.status(500).json({ erro: 'Erro interno ao buscar portfólio' });
-    }
-  },
 };
 
 module.exports = TarefaController;

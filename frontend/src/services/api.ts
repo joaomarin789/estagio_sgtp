@@ -3,7 +3,6 @@ import type {
   DashboardStats,
   Projeto,
   ProjetoForm,
-  ProjetoPortfolio,
   ProjetoResumo,
   RelatoriosData,
   Tarefa,
@@ -40,9 +39,6 @@ export const tarefaService = {
 
   projetos: () =>
     api.get<ProjetoResumo[]>('/tarefas/projetos').then((r) => r.data),
-
-  portfolioProjetos: () =>
-    api.get<ProjetoPortfolio[]>('/tarefas/portfolio/projetos').then((r) => r.data),
 };
 
 export const projetoService = {
