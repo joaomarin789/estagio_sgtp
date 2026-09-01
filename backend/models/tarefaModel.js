@@ -4,13 +4,6 @@ const PRIORIDADE_TAREFA_TO_DB = { baixa: 'BAIXA', media: 'MEDIA', alta: 'ALTA', 
 const PRIORIDADE_TAREFA_TO_APP = { BAIXA: 'baixa', MEDIA: 'media', ALTA: 'alta', CRITICA: 'critica' };
 const STATUS_TAREFA_TO_DB = { pendente: 'PENDENTE', em_andamento: 'EM_ANDAMENTO', concluida: 'CONCLUIDA', bloqueada: 'BLOQUEADA' };
 const STATUS_TAREFA_TO_APP = { PENDENTE: 'pendente', EM_ANDAMENTO: 'em_andamento', CONCLUIDA: 'concluida', BLOQUEADA: 'bloqueada' };
-const STATUS_PROJETO_TO_APP = {
-  NAO_INICIADO: 'ativo',
-  EM_ANDAMENTO: 'ativo',
-  PAUSADO: 'pausado',
-  CONCLUIDO: 'concluido',
-  CANCELADO: 'cancelado',
-};
 
 function mapTarefaRow(row) {
   return {
@@ -18,10 +11,6 @@ function mapTarefaRow(row) {
     prioridade: PRIORIDADE_TAREFA_TO_APP[row.prioridade],
     status: STATUS_TAREFA_TO_APP[row.status],
   };
-}
-
-function mapProjetoPortfolioRow(row) {
-  return { ...row, status: STATUS_PROJETO_TO_APP[row.status] };
 }
 
 const TAREFA_SELECT = `
@@ -299,23 +288,6 @@ const TarefaModel = {
       `SELECT id_projeto AS id, nome FROM projeto WHERE status = 'EM_ANDAMENTO' ORDER BY nome`
     );
     return rows;
-  },
-
-  async getPortfolioProjetos() {
-    const [rows] = await pool.execute(`
-      SELECT p.id_projeto AS id, p.nome, p.descricao, p.status, u.nome AS responsavel,
-             p.data_inicio, p.data_termino_prevista AS data_fim,
-             COUNT(t.id_tarefa) AS total_tarefas,
-             SUM(CASE WHEN t.status = 'CONCLUIDA' THEN 1 ELSE 0 END) AS tarefas_concluidas,
-             SUM(CASE WHEN t.status = 'BLOQUEADA' THEN 1 ELSE 0 END) AS tarefas_bloqueadas,
-             SUM(CASE WHEN t.prioridade IN ('ALTA', 'CRITICA') AND t.status NOT IN ('CONCLUIDA') THEN 1 ELSE 0 END) AS tarefas_risco
-      FROM projeto p
-      JOIN usuario u ON p.id_responsavel = u.id_usuario
-      LEFT JOIN tarefa t ON t.id_projeto = p.id_projeto
-      GROUP BY p.id_projeto, p.nome, p.descricao, p.status, u.nome, p.data_inicio, p.data_termino_prevista
-      ORDER BY p.status = 'EM_ANDAMENTO' DESC, p.nome ASC
-    `);
-    return rows.map(mapProjetoPortfolioRow);
   },
 };
 

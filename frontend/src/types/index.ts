@@ -69,20 +69,6 @@ export interface ProjetoForm {
   data_termino_prevista: string;
 }
 
-export interface ProjetoPortfolio {
-  id: number;
-  nome: string;
-  descricao: string | null;
-  status: 'ativo' | 'pausado' | 'concluido' | 'cancelado';
-  responsavel: string;
-  data_inicio: string;
-  data_fim: string | null;
-  total_tarefas: number;
-  tarefas_concluidas: number;
-  tarefas_bloqueadas: number;
-  tarefas_risco: number;
-}
-
 export interface DashboardStats {
   total_tarefas: number;
   tarefas_concluidas: number;
