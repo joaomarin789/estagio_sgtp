@@ -6,6 +6,9 @@
 
 USE sgtp;
 
+-- Garante que os acentos dos INSERTs sejam lidos como UTF-8 na importacao
+SET NAMES utf8mb4;
+
 -- ---------------------------------------------------------------------
 -- Usuarios
 -- senha_hash e um valor ficticio: nao ha tela de login/autenticacao

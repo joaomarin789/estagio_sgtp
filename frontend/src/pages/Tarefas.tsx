@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Plus, X } from 'lucide-react';
 import { tarefaService, usuarioService } from '../services/api';
-import type { Projeto, Tarefa, TarefaForm, Usuario } from '../types';
+import type { ProjetoResumo, Tarefa, TarefaForm, Usuario } from '../types';
 import TaskCard from '../components/ui/TaskCard';
 import TarefaModal from '../components/ui/TarefaModal';
 import { emptyForm, syncTime, tarefaToForm } from '../utils/labels';
@@ -18,7 +18,7 @@ const prioChips = ['', 'critica', 'alta', 'media', 'baixa'];
 
 export default function Tarefas() {
   const [tarefas, setTarefas] = useState<Tarefa[]>([]);
-  const [projetos, setProjetos] = useState<Projeto[]>([]);
+  const [projetos, setProjetos] = useState<ProjetoResumo[]>([]);
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [atividades, setAtividades] = useState<{ id: number; descricao: string; created_at: string; acao: string }[]>([]);
   const [loading, setLoading] = useState(true);

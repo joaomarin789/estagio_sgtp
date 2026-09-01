@@ -107,7 +107,12 @@ O frontend estará disponível em `http://localhost:5173`.
 | DELETE | /api/tarefas/:id      | Excluir tarefa         |
 | GET    | /api/tarefas/dashboard | Dados do dashboard    |
 | GET    | /api/tarefas/relatorios | Dados dos relatórios |
-| GET    | /api/tarefas/projetos  | Listar projetos ativos |
+| GET    | /api/tarefas/projetos  | Listar projetos ativos (dropdown do modal de tarefa) |
+| GET    | /api/projetos          | Listar projetos (filtros: busca, status, prioridade) |
+| GET    | /api/projetos/:id      | Buscar projeto por ID  |
+| POST   | /api/projetos          | Criar projeto          |
+| PUT    | /api/projetos/:id      | Atualizar projeto      |
+| DELETE | /api/projetos/:id      | Excluir projeto (retorna `tarefas_afetadas` — cascata) |
 | GET    | /api/usuarios          | Listar usuários ativos (para atribuir responsável) |
 | GET    | /api/health           | Health check           |
 

@@ -1,5 +1,15 @@
 import axios from 'axios';
-import type { DashboardStats, Projeto, ProjetoPortfolio, RelatoriosData, Tarefa, TarefaForm, Usuario } from '../types';
+import type {
+  DashboardStats,
+  Projeto,
+  ProjetoForm,
+  ProjetoPortfolio,
+  ProjetoResumo,
+  RelatoriosData,
+  Tarefa,
+  TarefaForm,
+  Usuario,
+} from '../types';
 
 const api = axios.create({
   baseURL: '/api',
@@ -29,10 +39,27 @@ export const tarefaService = {
     api.get<RelatoriosData>('/tarefas/relatorios').then((r) => r.data),
 
   projetos: () =>
-    api.get<Projeto[]>('/tarefas/projetos').then((r) => r.data),
+    api.get<ProjetoResumo[]>('/tarefas/projetos').then((r) => r.data),
 
   portfolioProjetos: () =>
     api.get<ProjetoPortfolio[]>('/tarefas/portfolio/projetos').then((r) => r.data),
+};
+
+export const projetoService = {
+  listar: (params?: Record<string, string>) =>
+    api.get<Projeto[]>('/projetos', { params }).then((r) => r.data),
+
+  buscar: (id: number) =>
+    api.get<Projeto>(`/projetos/${id}`).then((r) => r.data),
+
+  criar: (data: ProjetoForm) =>
+    api.post<Projeto>('/projetos', data).then((r) => r.data),
+
+  atualizar: (id: number, data: ProjetoForm) =>
+    api.put<Projeto>(`/projetos/${id}`, data).then((r) => r.data),
+
+  excluir: (id: number) =>
+    api.delete<{ mensagem: string; tarefas_afetadas: number }>(`/projetos/${id}`).then((r) => r.data),
 };
 
 export const usuarioService = {

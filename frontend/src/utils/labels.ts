@@ -1,4 +1,13 @@
-import type { Prioridade, Status, Tarefa, TarefaForm } from '../types';
+import type {
+  Prioridade,
+  PrioridadeProjeto,
+  Projeto,
+  ProjetoForm,
+  Status,
+  StatusProjeto,
+  Tarefa,
+  TarefaForm,
+} from '../types';
 
 export const statusLabels: Record<Status, string> = {
   pendente: 'Pendente',
@@ -98,5 +107,42 @@ export function tarefaToForm(t: Tarefa): TarefaForm {
     id_responsavel: t.id_responsavel,
     prazo: t.prazo.split('T')[0],
     projeto_id: t.projeto_id,
+  };
+}
+
+export const statusProjetoLabels: Record<StatusProjeto, string> = {
+  nao_iniciado: 'Não iniciado',
+  em_andamento: 'Em andamento',
+  pausado: 'Pausado',
+  concluido: 'Concluído',
+  cancelado: 'Cancelado',
+};
+
+export const prioridadeProjetoLabels: Record<PrioridadeProjeto, string> = {
+  baixa: 'Baixa',
+  media: 'Média',
+  alta: 'Alta',
+  urgente: 'Urgente',
+};
+
+export const emptyProjetoForm: ProjetoForm = {
+  nome: '',
+  descricao: '',
+  status: 'nao_iniciado',
+  prioridade: 'media',
+  id_responsavel: null,
+  data_inicio: '',
+  data_termino_prevista: '',
+};
+
+export function projetoToForm(p: Projeto): ProjetoForm {
+  return {
+    nome: p.nome,
+    descricao: p.descricao || '',
+    status: p.status,
+    prioridade: p.prioridade,
+    id_responsavel: p.id_responsavel,
+    data_inicio: p.data_inicio ? p.data_inicio.split('T')[0] : '',
+    data_termino_prevista: p.data_termino_prevista ? p.data_termino_prevista.split('T')[0] : '',
   };
 }

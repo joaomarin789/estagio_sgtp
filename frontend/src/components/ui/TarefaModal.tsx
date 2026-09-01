@@ -1,11 +1,11 @@
 import { X } from 'lucide-react';
-import type { Prioridade, Projeto, Status, TarefaForm, Usuario } from '../../types';
+import type { Prioridade, ProjetoResumo, Status, TarefaForm, Usuario } from '../../types';
 
 interface TarefaModalProps {
   open: boolean;
   editing: boolean;
   form: TarefaForm;
-  projetos: Projeto[];
+  projetos: ProjetoResumo[];
   usuarios: Usuario[];
   saving: boolean;
   onClose: () => void;

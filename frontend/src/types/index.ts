@@ -25,7 +25,8 @@ export interface TarefaForm {
   projeto_id: number | null;
 }
 
-export interface Projeto {
+/** Projeto resumido — usado no dropdown de projeto do modal de Tarefa. */
+export interface ProjetoResumo {
   id: number;
   nome: string;
 }
@@ -33,6 +34,39 @@ export interface Projeto {
 export interface Usuario {
   id_usuario: number;
   nome: string;
+}
+
+export type StatusProjeto =
+  | 'nao_iniciado'
+  | 'em_andamento'
+  | 'pausado'
+  | 'concluido'
+  | 'cancelado';
+
+export type PrioridadeProjeto = 'baixa' | 'media' | 'alta' | 'urgente';
+
+export interface Projeto {
+  id: number;
+  nome: string;
+  descricao: string | null;
+  status: StatusProjeto;
+  prioridade: PrioridadeProjeto;
+  id_responsavel: number;
+  responsavel_nome: string | null;
+  data_inicio: string;
+  data_termino_prevista: string | null;
+  total_tarefas: number;
+  created_at?: string;
+}
+
+export interface ProjetoForm {
+  nome: string;
+  descricao: string;
+  status: StatusProjeto;
+  prioridade: PrioridadeProjeto;
+  id_responsavel: number | null;
+  data_inicio: string;
+  data_termino_prevista: string;
 }
 
 export interface ProjetoPortfolio {

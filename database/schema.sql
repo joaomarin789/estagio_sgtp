@@ -10,6 +10,9 @@ CREATE DATABASE IF NOT EXISTS sgtp
 
 USE sgtp;
 
+-- Garante que o texto deste script (acentos) seja lido como UTF-8 na importacao
+SET NAMES utf8mb4;
+
 -- ---------------------------------------------------------------------
 -- Tabela: usuario
 -- Armazena todos os usuarios do sistema. O campo 'perfil' define o

@@ -1,173 +1,304 @@
-import { useEffect, useState } from 'react';
-import { tarefaService } from '../services/api';
-import type { ProjetoPortfolio } from '../types';
-import { formatDate, syncTime } from '../utils/labels';
+import { useCallback, useEffect, useState } from 'react';
+import { Plus, X, Pencil, Trash2 } from 'lucide-react';
+import { projetoService, usuarioService } from '../services/api';
+import type { Projeto, ProjetoForm, Usuario } from '../types';
+import ProjetoModal from '../components/ui/ProjetoModal';
+import {
+  emptyProjetoForm, formatDate, prioridadeProjetoLabels, projetoToForm,
+  statusProjetoLabels, syncTime,
+} from '../utils/labels';
 
-const statusLabel: Record<string, string> = {
-  ativo: 'Em execução',
-  pausado: 'Em risco',
-  concluido: 'Entrega',
-  cancelado: 'Cancelado',
-};
+const statusChips = [
+  { val: '', label: 'Todos' },
+  { val: 'nao_iniciado', label: 'Não iniciado' },
+  { val: 'em_andamento', label: 'Em andamento' },
+  { val: 'pausado', label: 'Pausado' },
+  { val: 'concluido', label: 'Concluído' },
+  { val: 'cancelado', label: 'Cancelado' },
+];
 
-const statusClass: Record<string, string> = {
-  ativo: 'blue',
+const prioChips = [
+  { val: '', label: 'Prioridade' },
+  { val: 'urgente', label: 'Urgente' },
+  { val: 'alta', label: 'Alta' },
+  { val: 'media', label: 'Média' },
+  { val: 'baixa', label: 'Baixa' },
+];
+
+const statusPill: Record<string, string> = {
+  nao_iniciado: '',
+  em_andamento: 'blue',
   pausado: 'yellow',
   concluido: 'green',
-  cancelado: '',
+  cancelado: 'red',
 };
 
+function mensagemErro(err: unknown, fallback: string): string {
+  if (typeof err === 'object' && err !== null && 'response' in err) {
+    const resp = (err as { response?: { data?: { erro?: string } } }).response;
+    if (resp?.data?.erro) return resp.data.erro;
+  }
+  return fallback;
+}
+
 export default function Projetos() {
-  const [projetos, setProjetos] = useState<ProjetoPortfolio[]>([]);
+  const [projetos, setProjetos] = useState<Projeto[]>([]);
+  const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [busca, setBusca] = useState('');
-  const [filtro, setFiltro] = useState('todos');
+  const [aviso, setAviso] = useState('');
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [form, setForm] = useState<ProjetoForm>(emptyProjetoForm);
+  const [saving, setSaving] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<Projeto | null>(null);
 
-  useEffect(() => {
-    tarefaService.portfolioProjetos()
-      .then(setProjetos)
-      .catch(() => setError('Erro ao carregar portfólio de projetos.'))
-      .finally(() => setLoading(false));
-  }, []);
+  const [filtros, setFiltros] = useState({ busca: '', status: '', prioridade: '' });
 
-  const filtrados = projetos.filter((p) => {
-    const matchBusca = !busca || p.nome.toLowerCase().includes(busca.toLowerCase()) || p.responsavel.toLowerCase().includes(busca.toLowerCase());
-    const matchFiltro =
-      filtro === 'todos' ||
-      (filtro === 'execucao' && p.status === 'ativo') ||
-      (filtro === 'risco' && (p.status === 'pausado' || Number(p.tarefas_risco) > 0)) ||
-      (filtro === 'entrega' && p.status === 'concluido');
-    return matchBusca && matchFiltro;
-  });
+  const carregar = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const params: Record<string, string> = {};
+      if (filtros.busca) params.busca = filtros.busca;
+      if (filtros.status) params.status = filtros.status;
+      if (filtros.prioridade) params.prioridade = filtros.prioridade;
 
-  const ativos = projetos.filter((p) => p.status === 'ativo').length;
-  const criticos = projetos.filter((p) => Number(p.tarefas_risco) > 0 || p.status === 'pausado').length;
+      const [projetosData, usuariosData] = await Promise.all([
+        projetoService.listar(params),
+        usuarioService.listar(),
+      ]);
+      setProjetos(projetosData);
+      setUsuarios(usuariosData);
+    } catch {
+      setError('Erro ao carregar projetos.');
+    } finally {
+      setLoading(false);
+    }
+  }, [filtros]);
 
-  if (loading) return <div className="loading-state">Carregando portfólio...</div>;
+  useEffect(() => { carregar(); }, [carregar]);
+
+  const abrirCriar = () => {
+    setEditingId(null);
+    setForm(emptyProjetoForm);
+    setError('');
+    setModalOpen(true);
+  };
+
+  const abrirEditar = (p: Projeto) => {
+    setEditingId(p.id);
+    setForm(projetoToForm(p));
+    setError('');
+    setModalOpen(true);
+  };
+
+  const salvar = async () => {
+    if (!form.nome || !form.data_inicio || !form.id_responsavel) {
+      setError('Preencha nome, data de início e responsável.');
+      return;
+    }
+    if (form.data_termino_prevista && form.data_termino_prevista < form.data_inicio) {
+      setError('A data de término prevista não pode ser anterior à data de início.');
+      return;
+    }
+    setSaving(true);
+    setError('');
+    try {
+      if (editingId) await projetoService.atualizar(editingId, form);
+      else await projetoService.criar(form);
+      setModalOpen(false);
+      carregar();
+    } catch (err) {
+      setError(mensagemErro(err, 'Erro ao salvar projeto.'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const excluir = async (projeto: Projeto) => {
+    try {
+      const res = await projetoService.excluir(projeto.id);
+      setDeleteConfirm(null);
+      setAviso(
+        res.tarefas_afetadas > 0
+          ? `Projeto excluído. ${res.tarefas_afetadas} tarefa(s) vinculada(s) também foram removidas.`
+          : 'Projeto excluído com sucesso.'
+      );
+      carregar();
+    } catch (err) {
+      setError(mensagemErro(err, 'Erro ao excluir projeto.'));
+    }
+  };
+
+  const porStatus = (s: string) => projetos.filter((p) => p.status === s).length;
 
   return (
     <>
       <div className="cockpit-header">
         <div>
-          <h1>Portfólio de projetos · visão operacional</h1>
+          <h1>Gerenciar projetos · portfólio operacional</h1>
           <div className="cockpit-meta">
-            <span className="pill">{ativos} projetos ativos</span>
-            {criticos > 0 && <span className="pill yellow">{criticos} críticos</span>}
+            <span className="pill">{projetos.length} projetos</span>
+            <span className="pill blue">{porStatus('em_andamento')} em andamento</span>
+            {porStatus('pausado') > 0 && (
+              <span className="pill yellow">{porStatus('pausado')} pausado(s)</span>
+            )}
             <span className="pill green"><span className="pill-dot" /> Sync · {syncTime()}</span>
           </div>
         </div>
+        <button type="button" className="btn btn-primary" onClick={abrirCriar}>
+          <Plus size={15} /> Projeto
+        </button>
       </div>
 
       {error && <div className="error-banner">{error}</div>}
-
-      <div className="card" style={{ marginBottom: 14 }}>
-        <div className="card-head">
-          <h3>Pipeline · Tempo real</h3>
-          <span>{projetos.reduce((s, p) => s + Number(p.total_tarefas), 0)} tarefas vinculadas</span>
+      {aviso && (
+        <div
+          className="error-banner"
+          style={{ background: 'var(--green-dim)', color: 'var(--green)', borderColor: 'rgba(34,197,94,0.25)' }}
+        >
+          {aviso}
         </div>
-        <div className="card-body">
-          <div className="pipeline-flow">
-            {[
-              { label: 'Ativos', val: ativos },
-              { label: 'Em risco', val: criticos },
-              { label: 'Pausados', val: projetos.filter((p) => p.status === 'pausado').length },
-              { label: 'Concluídos', val: projetos.filter((p) => p.status === 'concluido').length },
-            ].map((s) => (
-              <div key={s.label} className="pipeline-stage">
-                <div className="pipeline-stage-bar">
-                  <div className="pipeline-stage-fill" style={{ width: `${(s.val / Math.max(projetos.length, 1)) * 100}%` }} />
-                </div>
-                <label>{s.label}</label>
-                <strong>{s.val}</strong>
-              </div>
+      )}
+
+      <div className="tasks-layout">
+        <aside className="tasks-sidebar">
+          <h4>Filtros</h4>
+          <input
+            className="search-input"
+            placeholder="Nome, descrição, responsável..."
+            value={filtros.busca}
+            onChange={(e) => setFiltros({ ...filtros, busca: e.target.value })}
+          />
+
+          <div className="chip-group">
+            {statusChips.map((c) => (
+              <button
+                key={c.val || 'all'}
+                type="button"
+                className={`chip ${filtros.status === c.val ? 'active' : ''}`}
+                onClick={() => setFiltros({ ...filtros, status: c.val })}
+              >
+                {c.label}
+              </button>
             ))}
           </div>
+
+          <div className="chip-group" style={{ marginTop: 8 }}>
+            {prioChips.map((c) => (
+              <button
+                key={c.val || 'all'}
+                type="button"
+                className={`chip ${filtros.prioridade === c.val ? 'active' : ''}`}
+                onClick={() => setFiltros({ ...filtros, prioridade: c.val })}
+              >
+                {c.label}
+              </button>
+            ))}
+          </div>
+        </aside>
+
+        <div>
+          <div className="team-flow-header">
+            <div>
+              <div className="section-label">Portfólio</div>
+              <h3 style={{ fontSize: 14, fontWeight: 600 }}>Projetos cadastrados</h3>
+            </div>
+          </div>
+
+          {loading ? (
+            <div className="loading-state">Carregando...</div>
+          ) : projetos.length === 0 ? (
+            <div className="empty-state">Nenhum projeto encontrado</div>
+          ) : (
+            <div className="card">
+              <div className="card-body flush">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Código</th>
+                      <th>Projeto</th>
+                      <th>Status</th>
+                      <th>Prioridade</th>
+                      <th>Responsável</th>
+                      <th>Início</th>
+                      <th>Término previsto</th>
+                      <th>Tarefas</th>
+                      <th>Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {projetos.map((p) => (
+                      <tr key={p.id}>
+                        <td className="code-cell">PRJ-{String(p.id).padStart(3, '0')}</td>
+                        <td><strong>{p.nome}</strong></td>
+                        <td>
+                          <span className={`pill ${statusPill[p.status] || ''}`} style={{ fontSize: 10 }}>
+                            {statusProjetoLabels[p.status]}
+                          </span>
+                        </td>
+                        <td>{prioridadeProjetoLabels[p.prioridade]}</td>
+                        <td>{p.responsavel_nome ?? '—'}</td>
+                        <td>{formatDate(p.data_inicio)}</td>
+                        <td>{p.data_termino_prevista ? formatDate(p.data_termino_prevista) : '—'}</td>
+                        <td>{p.total_tarefas}</td>
+                        <td>
+                          <button type="button" className="btn-icon" onClick={() => abrirEditar(p)} title="Editar">
+                            <Pencil size={14} />
+                          </button>
+                          <button type="button" className="btn-icon danger" onClick={() => setDeleteConfirm(p)} title="Excluir">
+                            <Trash2 size={14} />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
-      <div className="filter-bar">
-        <input
-          className="search-input"
-          placeholder="Buscar projeto ou responsável..."
-          value={busca}
-          onChange={(e) => setBusca(e.target.value)}
-        />
-        {[
-          { k: 'todos', l: 'Todos' },
-          { k: 'execucao', l: 'Em execução' },
-          { k: 'risco', l: 'Em risco' },
-          { k: 'entrega', l: 'Entrega' },
-        ].map((f) => (
-          <button
-            key={f.k}
-            type="button"
-            className={`chip ${filtro === f.k ? 'active' : ''}`}
-            onClick={() => setFiltro(f.k)}
-          >
-            {f.l}
-          </button>
-        ))}
-      </div>
+      <ProjetoModal
+        open={modalOpen}
+        editing={!!editingId}
+        form={form}
+        usuarios={usuarios}
+        saving={saving}
+        onClose={() => setModalOpen(false)}
+        onSave={salvar}
+        onChange={(field, value) => setForm((prev) => ({ ...prev, [field]: value }))}
+      />
 
-      <div className="card">
-        <div className="card-body flush">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Código</th>
-                <th>Projeto / Pipeline</th>
-                <th>Status</th>
-                <th>Risco</th>
-                <th>SLA</th>
-                <th>Squad</th>
-                <th>Cap.</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtrados.map((p) => {
-                const pct = p.total_tarefas > 0
-                  ? Math.round(Number(p.tarefas_concluidas) / Number(p.total_tarefas) * 100)
-                  : 0;
-                const cap = Math.min(48 + pct / 2 + Number(p.tarefas_risco) * 8, 98);
-                const risco = Number(p.tarefas_risco) > 1 ? 'Alto' : Number(p.tarefas_risco) === 1 ? 'Moderado' : 'Baixo';
-                return (
-                  <tr key={p.id}>
-                    <td className="code-cell">PRJ-{String(p.id).padStart(3, '0')}</td>
-                    <td>
-                      <strong>{p.nome}</strong>
-                      <div className="proj-progress" style={{ marginTop: 6 }}>
-                        <div className="progress-track">
-                          <div className="progress-fill" style={{ width: `${pct}%` }} />
-                        </div>
-                        <span>{pct}%</span>
-                      </div>
-                      {Number(p.tarefas_bloqueadas) > 0 && (
-                        <div style={{ fontSize: 11, color: 'var(--yellow)', marginTop: 4 }}>
-                          {p.tarefas_bloqueadas} bloqueada(s)
-                        </div>
-                      )}
-                    </td>
-                    <td>
-                      <span className={`pill ${statusClass[p.status] || ''}`} style={{ fontSize: 10 }}>
-                        {statusLabel[p.status]}
-                      </span>
-                    </td>
-                    <td style={{ color: risco === 'Alto' ? 'var(--red)' : risco === 'Moderado' ? 'var(--yellow)' : 'var(--text-muted)' }}>
-                      {risco}
-                    </td>
-                    <td style={{ color: p.data_fim ? 'var(--text-secondary)' : 'var(--text-muted)' }}>
-                      {p.data_fim ? formatDate(p.data_fim) : '—'}
-                    </td>
-                    <td>{p.responsavel.split(' ')[0]}</td>
-                    <td>{Math.round(cap)}%</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+      {deleteConfirm !== null && (
+        <div className="modal-overlay" onClick={() => setDeleteConfirm(null)}>
+          <div className="modal" style={{ maxWidth: 420 }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-head">
+              <h2>Confirmar exclusão</h2>
+              <button type="button" className="btn-icon" onClick={() => setDeleteConfirm(null)}><X size={18} /></button>
+            </div>
+            <div className="modal-body">
+              <p style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
+                {Number(deleteConfirm.total_tarefas) > 0 ? (
+                  <>
+                    Este projeto possui <strong>{deleteConfirm.total_tarefas} tarefa(s) vinculada(s)</strong>, que
+                    também serão excluídas (ON DELETE CASCADE). Confirma a exclusão de{' '}
+                    <strong>{deleteConfirm.nome}</strong>?
+                  </>
+                ) : (
+                  <>Excluir o projeto <strong>{deleteConfirm.nome}</strong>? Ação irreversível.</>
+                )}
+              </p>
+            </div>
+            <div className="modal-foot">
+              <button type="button" className="btn btn-ghost" onClick={() => setDeleteConfirm(null)}>Cancelar</button>
+              <button type="button" className="btn btn-danger" onClick={() => excluir(deleteConfirm)}>Excluir</button>
+            </div>
+          </div>
         </div>
-      </div>
+      )}
     </>
   );
 }
