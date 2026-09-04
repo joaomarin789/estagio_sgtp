@@ -284,7 +284,7 @@ export default function Projetos() {
                 {Number(deleteConfirm.total_tarefas) > 0 ? (
                   <>
                     Este projeto possui <strong>{deleteConfirm.total_tarefas} tarefa(s) vinculada(s)</strong>, que
-                    também serão excluídas (ON DELETE CASCADE). Confirma a exclusão de{' '}
+                    também serão excluídas. Confirma a exclusão de{' '}
                     <strong>{deleteConfirm.nome}</strong>?
                   </>
                 ) : (
