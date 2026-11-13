@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Plus } from 'lucide-react';
+import { Plus, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { tarefaService } from '../services/api';
-import type { DashboardStats, Tarefa } from '../types';
+import { dashboardService, tarefaService } from '../services/api';
+import type { DashboardStats, Status, Tarefa } from '../types';
 import TaskCard from '../components/ui/TaskCard';
 import {
-  formatDate, formatDateTime, syncTime, pipelineStages,
+  formatDate, formatDateTime, statusLabels, pipelineStages,
 } from '../utils/labels';
 
 export default function Dashboard() {
@@ -13,10 +13,12 @@ export default function Dashboard() {
   const [movimento, setMovimento] = useState<Tarefa[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  // UC04 - indicador de status selecionado e as tarefas que o compoem.
+  const [detalhe, setDetalhe] = useState<{ status: Status; tarefas: Tarefa[]; erro?: string } | null>(null);
 
   useEffect(() => {
     Promise.all([
-      tarefaService.dashboard(),
+      dashboardService.indicadores(),
       tarefaService.listar({ status: 'em_andamento' }),
     ])
       .then(([dash, tasks]) => {
@@ -48,6 +50,23 @@ export default function Dashboard() {
 
   const maxPipeline = Math.max(...pipelineStages.map((s) => getPipelineCount(s.key)), 1);
 
+  // Sequencia 04, bloco opt: ao clicar em um indicador de status,
+  // busca e exibe as tarefas daquele status.
+  const detalhar = (status: Status) => {
+    dashboardService.tarefasPorStatus(status)
+      .then((tarefas) => setDetalhe({ status, tarefas }))
+      .catch(() => setDetalhe({ status, tarefas: [], erro: 'Não foi possível carregar as tarefas deste indicador.' }));
+  };
+
+  // Atributos que tornam um indicador clicavel (mouse e teclado).
+  const clicavel = (status: Status) => ({
+    role: 'button',
+    tabIndex: 0,
+    title: `Ver tarefas: ${statusLabels[status]}`,
+    onClick: () => detalhar(status),
+    onKeyDown: (e: { key: string }) => { if (e.key === 'Enter') detalhar(status); },
+  });
+
   return (
     <>
       <div className="cockpit-header">
@@ -56,8 +75,6 @@ export default function Dashboard() {
           <div className="cockpit-meta">
             <span className="pill yellow">{slaCritico} vencem em breve</span>
             <span className="pill red">{bloqueadas} bloqueada{bloqueadas !== 1 ? 's' : ''}</span>
-            <span className="pill green"><span className="pill-dot" /> Sync ERP · {syncTime()}</span>
-            <span className="pill">v1.0.0 · prod</span>
           </div>
         </div>
         <Link to="/tarefas" className="btn btn-primary"><Plus size={15} /> Tarefa</Link>
@@ -74,12 +91,12 @@ export default function Dashboard() {
           <div className="val">{data.projetos_ativos}</div>
           <div className="sub">{bloqueadas > 0 ? `${bloqueadas} risco` : 'Em execução'}</div>
         </div>
-        <div className="kpi-box danger">
+        <div className="kpi-box danger clickable" {...clicavel('bloqueada')}>
           <label>Bloqueadas</label>
           <div className="val">{bloqueadas}</div>
           <div className="sub">Requer ação</div>
         </div>
-        <div className="kpi-box">
+        <div className="kpi-box clickable" {...clicavel('concluida')}>
           <label>Concluídas</label>
           <div className="val ok">{data.tarefas_concluidas}</div>
           <div className="sub">{Math.round(Number(data.tarefas_concluidas) / Number(data.total_tarefas) * 100)}% taxa</div>
@@ -108,7 +125,7 @@ export default function Dashboard() {
                 {pipelineStages.map((stage) => {
                   const count = getPipelineCount(stage.key);
                   return (
-                    <div key={stage.key} className="pipeline-stage">
+                    <div key={stage.key} className="pipeline-stage clickable" {...clicavel(stage.key)}>
                       <div className="pipeline-stage-bar">
                         <div className="pipeline-stage-fill" style={{ width: `${(count / maxPipeline) * 100}%` }} />
                       </div>
@@ -121,10 +138,44 @@ export default function Dashboard() {
               <div className="pipeline-meta">
                 <span><em>{bloqueadas}</em> bloqueado{bloqueadas !== 1 ? 's' : ''}</span>
                 <span><em>{Number(data.tarefas_pendentes)}</em> pendentes</span>
-                <span>Lead time médio: <em>2,4d</em></span>
+                <span>
+                  Lead time médio:{' '}
+                  <em>{data.lead_time_medio !== null ? `${String(data.lead_time_medio).replace('.', ',')}d` : '—'}</em>
+                </span>
               </div>
             </div>
           </div>
+
+          {detalhe && (
+            <div className="card" style={{ marginBottom: 12 }}>
+              <div className="card-head">
+                <h3>Tarefas · {statusLabels[detalhe.status]} ({detalhe.tarefas.length})</h3>
+                <button type="button" className="btn-icon" onClick={() => setDetalhe(null)} title="Fechar">
+                  <X size={14} />
+                </button>
+              </div>
+              <ul className="critical-list card-body flush">
+                {detalhe.erro ? (
+                  <li className="critical-item"><span>{detalhe.erro}</span></li>
+                ) : detalhe.tarefas.length === 0 ? (
+                  <li className="critical-item"><span>Nenhuma tarefa neste status</span></li>
+                ) : (
+                  detalhe.tarefas.map((t) => (
+                    <li key={t.id} className="critical-item">
+                      <div>
+                        <strong>{t.titulo}</strong>
+                        <span>
+                          {t.responsavel || 'Sem responsável'} · {t.projeto_nome}
+                          {t.motivo_bloqueio ? ` · Impedimento: ${t.motivo_bloqueio}` : ''}
+                        </span>
+                      </div>
+                      <span className="timer">{formatDate(t.prazo)}</span>
+                    </li>
+                  ))
+                )}
+              </ul>
+            </div>
+          )}
 
           <div className="grid-2">
             <div className="card">
@@ -173,7 +224,7 @@ export default function Dashboard() {
                   <li key={e.id} className="critical-item">
                     <div>
                       <strong>{e.titulo}</strong>
-                      <span>{e.responsavel} · {e.projeto_nome || 'Sem projeto'}</span>
+                      <span>{e.responsavel || 'Sem responsável'} · {e.projeto_nome || 'Sem projeto'}</span>
                     </div>
                     <span className={`timer ${e.prioridade === 'critica' ? 'danger' : ''}`}>
                       {formatDate(e.prazo)}

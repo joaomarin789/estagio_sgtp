@@ -36,6 +36,7 @@ CREATE TABLE usuario (
 -- ---------------------------------------------------------------------
 -- Tabela: projeto
 -- Corresponde ao UC01 - Gerenciar Projetos.
+-- 'ativo' implementa a exclusao logica (1 = ativo, 0 = excluido).
 -- ---------------------------------------------------------------------
 CREATE TABLE projeto (
     id_projeto              INT             NOT NULL AUTO_INCREMENT,
@@ -50,6 +51,7 @@ CREATE TABLE projeto (
                                             NOT NULL DEFAULT 'MEDIA',
     id_responsavel          INT             NOT NULL,
     data_cadastro           DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    ativo                   TINYINT(1)      NOT NULL DEFAULT 1,
 
     CONSTRAINT pk_projeto PRIMARY KEY (id_projeto),
     CONSTRAINT fk_projeto_responsavel
@@ -68,6 +70,9 @@ CREATE INDEX idx_projeto_responsavel ON projeto (id_responsavel);
 -- Tabela: tarefa
 -- Corresponde ao UC02 - Gerenciar Backlog Operacional (CRUD principal)
 -- e ao UC03 - Atualizar Andamento da Tarefa.
+-- 'ativo' implementa a exclusao logica. Uma tarefa so e visivel quando
+-- ela E o seu projeto estao ativos (composicao Projeto <>-- Tarefa).
+-- 'motivo_bloqueio' guarda o impedimento enquanto o status e BLOQUEADA.
 -- ---------------------------------------------------------------------
 CREATE TABLE tarefa (
     id_tarefa       INT             NOT NULL AUTO_INCREMENT,
@@ -77,16 +82,18 @@ CREATE TABLE tarefa (
                                     NOT NULL DEFAULT 'MEDIA',
     status          ENUM('PENDENTE', 'EM_ANDAMENTO', 'CONCLUIDA', 'BLOQUEADA')
                                     NOT NULL DEFAULT 'PENDENTE',
+    motivo_bloqueio TEXT            NULL,
     prazo           DATE            NULL,
     id_projeto      INT             NOT NULL,
     id_responsavel  INT             NULL,
     data_criacao    DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
     data_conclusao  DATETIME        NULL,
+    ativo           TINYINT(1)      NOT NULL DEFAULT 1,
 
     CONSTRAINT pk_tarefa PRIMARY KEY (id_tarefa),
     CONSTRAINT fk_tarefa_projeto
         FOREIGN KEY (id_projeto) REFERENCES projeto (id_projeto)
-        ON DELETE CASCADE
+        ON DELETE RESTRICT
         ON UPDATE CASCADE,
     CONSTRAINT fk_tarefa_responsavel
         FOREIGN KEY (id_responsavel) REFERENCES usuario (id_usuario)
@@ -110,7 +117,7 @@ CREATE INDEX idx_tarefa_responsavel ON tarefa (id_responsavel);
 CREATE TABLE historico_atividade (
     id_historico    INT             NOT NULL AUTO_INCREMENT,
     acao            ENUM('CRIACAO', 'EDICAO', 'EXCLUSAO', 'MUDANCA_STATUS',
-                         'ATRIBUICAO')
+                         'ATRIBUICAO', 'ALTERACAO', 'RESTAURACAO')
                                     NOT NULL,
     campo_alterado  VARCHAR(50)     NULL,
     valor_anterior  VARCHAR(100)    NULL,
@@ -127,7 +134,7 @@ CREATE TABLE historico_atividade (
         ON UPDATE CASCADE,
     CONSTRAINT fk_historico_tarefa
         FOREIGN KEY (id_tarefa) REFERENCES tarefa (id_tarefa)
-        ON DELETE CASCADE
+        ON DELETE RESTRICT
         ON UPDATE CASCADE
 ) ENGINE = InnoDB;
 

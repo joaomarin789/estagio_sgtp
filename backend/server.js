@@ -6,6 +6,8 @@ const cors = require('cors');
 const tarefaRoutes = require('./routes/tarefaRoutes');
 const projetoRoutes = require('./routes/projetoRoutes');
 const usuarioRoutes = require('./routes/usuarioRoutes');
+const dashboardRoutes = require('./routes/dashboardRoutes');
+const UsuarioController = require('./controllers/usuarioController');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -17,9 +19,13 @@ app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', sistema: 'SGTP - Sistema de Gerenciamento de Tarefas e Projetos' });
 });
 
+// Identifica o "usuario atual" (cabecalho X-Usuario-Id) antes de qualquer rota.
+app.use(UsuarioController.identificar);
+
 app.use('/api/tarefas', tarefaRoutes);
 app.use('/api/projetos', projetoRoutes);
 app.use('/api/usuarios', usuarioRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 
 app.use((_req, res) => {
   res.status(404).json({ erro: 'Rota não encontrada' });

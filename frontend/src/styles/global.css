@@ -513,6 +513,41 @@ table { border-collapse: collapse; width: 100%; }
 
 .task-card:hover .task-card-actions { opacity: 1; }
 
+/* UC03 - seletor "Mover para..." do card e da tabela */
+.status-select {
+  padding: 3px 6px;
+  font-size: 11px;
+  background: var(--bg-input);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+}
+.status-select:focus { border-color: rgba(59,130,246,0.5); outline: none; }
+
+/* Seletor "Usuário atual" no topo de todas as telas */
+.user-bar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 10px 20px 0;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* Motivo do impedimento exibido no card da tarefa bloqueada */
+.motivo-bloqueio {
+  font-size: 11px;
+  color: var(--red);
+  margin-bottom: 6px;
+}
+
+/* Indicadores do painel que abrem a lista de tarefas ao clicar */
+.kpi-box.clickable,
+.pipeline-stage.clickable { cursor: pointer; }
+.kpi-box.clickable:hover { border-color: var(--border-strong); }
+
 .badge {
   display: inline-flex;
   align-items: center;

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
+import UsuarioAtual from './UsuarioAtual';
 
 export default function MainLayout() {
   const [collapsed, setCollapsed] = useState(false);
@@ -10,6 +11,7 @@ export default function MainLayout() {
     <div className="app-layout">
       <Sidebar collapsed={collapsed} onToggle={() => setCollapsed(!collapsed)} />
       <div className="main-area" style={{ marginLeft: margin }}>
+        <UsuarioAtual />
         <main className="page-content">
           <Outlet />
         </main>

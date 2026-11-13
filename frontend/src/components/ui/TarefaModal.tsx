@@ -1,5 +1,5 @@
 import { X } from 'lucide-react';
-import type { Prioridade, ProjetoResumo, Status, TarefaForm, Usuario } from '../../types';
+import type { Prioridade, ProjetoResumo, TarefaForm, Usuario } from '../../types';
 
 interface TarefaModalProps {
   open: boolean;
@@ -8,13 +8,14 @@ interface TarefaModalProps {
   projetos: ProjetoResumo[];
   usuarios: Usuario[];
   saving: boolean;
+  error?: string;
   onClose: () => void;
   onSave: () => void;
   onChange: (field: keyof TarefaForm, value: string | number | null) => void;
 }
 
 export default function TarefaModal({
-  open, editing, form, projetos, usuarios, saving, onClose, onSave, onChange,
+  open, editing, form, projetos, usuarios, saving, error, onClose, onSave, onChange,
 }: TarefaModalProps) {
   if (!open) return null;
 
@@ -26,6 +27,8 @@ export default function TarefaModal({
           <button type="button" className="btn-icon" onClick={onClose}><X size={18} /></button>
         </div>
         <div className="modal-body">
+          {/* Erro exibido dentro do modal: o banner da página fica escondido atrás do overlay */}
+          {error && <div className="error-banner">{error}</div>}
           <div className="form-grid">
             <div className="form-group full">
               <label>Título</label>
@@ -45,13 +48,8 @@ export default function TarefaModal({
               </select>
             </div>
             <div className="form-group">
-              <label>Status</label>
-              <select value={form.status} onChange={(e) => onChange('status', e.target.value as Status)}>
-                <option value="pendente">Pendente</option>
-                <option value="em_andamento">Em andamento</option>
-                <option value="concluida">Concluída</option>
-                <option value="bloqueada">Bloqueada</option>
-              </select>
+              <label>Prazo</label>
+              <input type="date" value={form.prazo} onChange={(e) => onChange('prazo', e.target.value)} />
             </div>
             <div className="form-group">
               <label>Responsável</label>
@@ -59,23 +57,19 @@ export default function TarefaModal({
                 value={form.id_responsavel ?? ''}
                 onChange={(e) => onChange('id_responsavel', e.target.value ? Number(e.target.value) : null)}
               >
-                <option value="">Selecione...</option>
+                <option value="">Sem responsável</option>
                 {usuarios.map((u) => (
                   <option key={u.id_usuario} value={u.id_usuario}>{u.nome}</option>
                 ))}
               </select>
             </div>
             <div className="form-group">
-              <label>Prazo</label>
-              <input type="date" value={form.prazo} onChange={(e) => onChange('prazo', e.target.value)} />
-            </div>
-            <div className="form-group full">
               <label>Projeto</label>
               <select
                 value={form.projeto_id ?? ''}
                 onChange={(e) => onChange('projeto_id', e.target.value ? Number(e.target.value) : null)}
               >
-                <option value="">Sem projeto</option>
+                <option value="">Selecione...</option>
                 {projetos.map((p) => (
                   <option key={p.id} value={p.id}>{p.nome}</option>
                 ))}

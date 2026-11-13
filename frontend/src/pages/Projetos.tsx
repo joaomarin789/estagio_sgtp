@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Plus, X, Pencil, Trash2 } from 'lucide-react';
-import { projetoService, usuarioService } from '../services/api';
+import { Plus, X, Pencil, RotateCcw, Trash2 } from 'lucide-react';
+import { mensagemErro, projetoService, usuarioService } from '../services/api';
 import type { Projeto, ProjetoForm, Usuario } from '../types';
 import ProjetoModal from '../components/ui/ProjetoModal';
 import {
@@ -33,14 +33,6 @@ const statusPill: Record<string, string> = {
   cancelado: 'red',
 };
 
-function mensagemErro(err: unknown, fallback: string): string {
-  if (typeof err === 'object' && err !== null && 'response' in err) {
-    const resp = (err as { response?: { data?: { erro?: string } } }).response;
-    if (resp?.data?.erro) return resp.data.erro;
-  }
-  return fallback;
-}
-
 export default function Projetos() {
   const [projetos, setProjetos] = useState<Projeto[]>([]);
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
@@ -51,9 +43,11 @@ export default function Projetos() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState<ProjetoForm>(emptyProjetoForm);
   const [saving, setSaving] = useState(false);
-  const [deleteConfirm, setDeleteConfirm] = useState<Projeto | null>(null);
+  // Projeto aguardando confirmacao de exclusao e a quantidade de tarefas vinculadas.
+  const [deleteConfirm, setDeleteConfirm] = useState<{ projeto: Projeto; totalTarefas: number } | null>(null);
 
-  const [filtros, setFiltros] = useState({ busca: '', status: '', prioridade: '' });
+  // inativos = listar os projetos excluidos, para restauracao (UC01 3.4).
+  const [filtros, setFiltros] = useState({ busca: '', status: '', prioridade: '', inativos: false });
 
   const carregar = useCallback(async () => {
     setLoading(true);
@@ -63,6 +57,7 @@ export default function Projetos() {
       if (filtros.busca) params.busca = filtros.busca;
       if (filtros.status) params.status = filtros.status;
       if (filtros.prioridade) params.prioridade = filtros.prioridade;
+      if (filtros.inativos) params.inativos = '1';
 
       const [projetosData, usuariosData] = await Promise.all([
         projetoService.listar(params),
@@ -116,18 +111,46 @@ export default function Projetos() {
     }
   };
 
-  const excluir = async (projeto: Projeto) => {
+  // Sequencia 01, mensagem 4: ao clicar em excluir, consulta quantas tarefas
+  // estao vinculadas ao projeto para informar na confirmacao.
+  const solicitarExclusao = async (projeto: Projeto) => {
+    setError('');
     try {
-      const res = await projetoService.excluir(projeto.id);
-      setDeleteConfirm(null);
+      const totalTarefas = await projetoService.contarTarefasVinculadas(projeto.id);
+      setDeleteConfirm({ projeto, totalTarefas });
+    } catch (err) {
+      setError(mensagemErro(err, 'Erro ao consultar as tarefas do projeto.'));
+    }
+  };
+
+  // Sequencia 01, mensagem 5: exclusao confirmada pelo usuario.
+  const excluir = async () => {
+    if (!deleteConfirm) return;
+    const { projeto, totalTarefas } = deleteConfirm;
+    // Fecha o modal antes: o aviso e o erro aparecem na pagina, atras dele.
+    setDeleteConfirm(null);
+    try {
+      await projetoService.excluir(projeto.id);
       setAviso(
-        res.tarefas_afetadas > 0
-          ? `Projeto excluído. ${res.tarefas_afetadas} tarefa(s) vinculada(s) também foram removidas.`
+        totalTarefas > 0
+          ? `Projeto excluído. ${totalTarefas} tarefa(s) vinculada(s) foram ocultadas junto com ele.`
           : 'Projeto excluído com sucesso.'
       );
       carregar();
     } catch (err) {
       setError(mensagemErro(err, 'Erro ao excluir projeto.'));
+    }
+  };
+
+  // UC01 3.4 - Restaurar Projetos. As tarefas do projeto voltam a aparecer junto com ele.
+  const restaurar = async (projeto: Projeto) => {
+    setError('');
+    try {
+      await projetoService.restaurar(projeto.id);
+      setAviso(`Projeto "${projeto.nome}" restaurado.`);
+      carregar();
+    } catch (err) {
+      setError(mensagemErro(err, 'Erro ao restaurar projeto.'));
     }
   };
 
@@ -197,13 +220,25 @@ export default function Projetos() {
               </button>
             ))}
           </div>
+
+          <div className="chip-group" style={{ marginTop: 8 }}>
+            <button
+              type="button"
+              className={`chip ${filtros.inativos ? 'active' : ''}`}
+              onClick={() => setFiltros({ ...filtros, inativos: !filtros.inativos })}
+            >
+              Inativos (excluídos)
+            </button>
+          </div>
         </aside>
 
         <div>
           <div className="team-flow-header">
             <div>
               <div className="section-label">Portfólio</div>
-              <h3 style={{ fontSize: 14, fontWeight: 600 }}>Projetos cadastrados</h3>
+              <h3 style={{ fontSize: 14, fontWeight: 600 }}>
+                {filtros.inativos ? 'Projetos excluídos' : 'Projetos cadastrados'}
+              </h3>
             </div>
           </div>
 
@@ -244,12 +279,20 @@ export default function Projetos() {
                         <td>{p.data_termino_prevista ? formatDate(p.data_termino_prevista) : '—'}</td>
                         <td>{p.total_tarefas}</td>
                         <td>
-                          <button type="button" className="btn-icon" onClick={() => abrirEditar(p)} title="Editar">
-                            <Pencil size={14} />
-                          </button>
-                          <button type="button" className="btn-icon danger" onClick={() => setDeleteConfirm(p)} title="Excluir">
-                            <Trash2 size={14} />
-                          </button>
+                          {filtros.inativos ? (
+                            <button type="button" className="btn-icon" onClick={() => restaurar(p)} title="Restaurar">
+                              <RotateCcw size={14} />
+                            </button>
+                          ) : (
+                            <>
+                              <button type="button" className="btn-icon" onClick={() => abrirEditar(p)} title="Editar">
+                                <Pencil size={14} />
+                              </button>
+                              <button type="button" className="btn-icon danger" onClick={() => solicitarExclusao(p)} title="Excluir">
+                                <Trash2 size={14} />
+                              </button>
+                            </>
+                          )}
                         </td>
                       </tr>
                     ))}
@@ -281,20 +324,21 @@ export default function Projetos() {
             </div>
             <div className="modal-body">
               <p style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
-                {Number(deleteConfirm.total_tarefas) > 0 ? (
+                {deleteConfirm.totalTarefas > 0 ? (
                   <>
-                    Este projeto possui <strong>{deleteConfirm.total_tarefas} tarefa(s) vinculada(s)</strong>, que
-                    também serão excluídas. Confirma a exclusão de{' '}
-                    <strong>{deleteConfirm.nome}</strong>?
+                    Este projeto possui <strong>{deleteConfirm.totalTarefas} tarefa(s) vinculada(s)</strong>, que
+                    deixarão de aparecer junto com ele. Confirma a exclusão de{' '}
+                    <strong>{deleteConfirm.projeto.nome}</strong>?
                   </>
                 ) : (
-                  <>Excluir o projeto <strong>{deleteConfirm.nome}</strong>? Ação irreversível.</>
+                  <>Excluir o projeto <strong>{deleteConfirm.projeto.nome}</strong>?</>
                 )}
+                {' '}Os dados são mantidos e o projeto pode ser restaurado.
               </p>
             </div>
             <div className="modal-foot">
               <button type="button" className="btn btn-ghost" onClick={() => setDeleteConfirm(null)}>Cancelar</button>
-              <button type="button" className="btn btn-danger" onClick={() => excluir(deleteConfirm)}>Excluir</button>
+              <button type="button" className="btn btn-danger" onClick={excluir}>Excluir</button>
             </div>
           </div>
         </div>

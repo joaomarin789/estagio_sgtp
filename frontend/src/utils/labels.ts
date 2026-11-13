@@ -16,6 +16,18 @@ export const statusLabels: Record<Status, string> = {
   bloqueada: 'Bloqueada',
 };
 
+/**
+ * Diagrama de Estados da Tarefa: para onde cada estado pode ir.
+ * O backend valida a mesma regra; aqui ela so define quais opcoes
+ * aparecem para o usuario.
+ */
+export const transicoesStatus: Record<Status, Status[]> = {
+  pendente: ['em_andamento', 'bloqueada'],
+  em_andamento: ['concluida', 'bloqueada'],
+  bloqueada: ['em_andamento'],
+  concluida: [],
+};
+
 export const prioridadeLabels: Record<Prioridade, string> = {
   baixa: 'Baixa',
   media: 'Média',
@@ -92,7 +104,6 @@ export const emptyForm: TarefaForm = {
   titulo: '',
   descricao: '',
   prioridade: 'media',
-  status: 'pendente',
   id_responsavel: null,
   prazo: '',
   projeto_id: null,
@@ -103,7 +114,6 @@ export function tarefaToForm(t: Tarefa): TarefaForm {
     titulo: t.titulo,
     descricao: t.descricao || '',
     prioridade: t.prioridade,
-    status: t.status,
     id_responsavel: t.id_responsavel,
     prazo: t.prazo.split('T')[0],
     projeto_id: t.projeto_id,

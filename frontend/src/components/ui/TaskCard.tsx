@@ -1,6 +1,7 @@
-import { Pencil, Trash2 } from 'lucide-react';
-import type { Tarefa } from '../../types';
+import { Pencil, RotateCcw, Trash2 } from 'lucide-react';
+import type { Status, Tarefa } from '../../types';
 import Badge from '../ui/Badge';
+import StatusSelect from '../ui/StatusSelect';
 import {
   formatDate, initials, slaLabel, taskProgress, ticketId,
 } from '../../utils/labels';
@@ -9,10 +10,13 @@ interface TaskCardProps {
   tarefa: Tarefa;
   onEdit?: (t: Tarefa) => void;
   onDelete?: (id: number) => void;
+  /** Usado na listagem de tarefas excluidas (inativas). */
+  onRestore?: (id: number) => void;
+  onStatusChange?: (t: Tarefa, novoStatus: Status) => void;
   showActions?: boolean;
 }
 
-export default function TaskCard({ tarefa: t, onEdit, onDelete, showActions }: TaskCardProps) {
+export default function TaskCard({ tarefa: t, onEdit, onDelete, onRestore, onStatusChange, showActions }: TaskCardProps) {
   const sla = slaLabel(t.prazo, t.status);
   const progress = taskProgress(t.status);
 
@@ -30,6 +34,11 @@ export default function TaskCard({ tarefa: t, onEdit, onDelete, showActions }: T
               <Trash2 size={14} />
             </button>
           )}
+          {onRestore && (
+            <button type="button" className="btn-icon" onClick={() => onRestore(t.id)} title="Restaurar">
+              <RotateCcw size={14} />
+            </button>
+          )}
         </div>
       )}
 
@@ -43,17 +52,26 @@ export default function TaskCard({ tarefa: t, onEdit, onDelete, showActions }: T
       <div className="task-card-title">{t.titulo}</div>
 
       <div className="task-card-meta">
-        <span>[{initials(t.responsavel)}] {t.responsavel.split(' ')[0]}</span>
+        <span>
+          {t.responsavel ? `[${initials(t.responsavel)}] ${t.responsavel.split(' ')[0]}` : 'Sem responsável'}
+        </span>
         <span>·</span>
         <span>{formatDate(t.prazo)}</span>
         <span className={`sla ${sla.class}`}>{sla.text}</span>
       </div>
+
+      {t.status === 'bloqueada' && t.motivo_bloqueio && (
+        <div className="motivo-bloqueio">Impedimento: {t.motivo_bloqueio}</div>
+      )}
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <div className="progress-track" style={{ flex: 1 }}>
           <div className="progress-fill" style={{ width: `${progress}%` }} />
         </div>
         <span style={{ fontSize: 11, color: 'var(--text-muted)', minWidth: 32 }}>{progress}%</span>
+        {onStatusChange && (
+          <StatusSelect status={t.status} onChange={(novo) => onStatusChange(t, novo)} />
+        )}
       </div>
     </div>
   );

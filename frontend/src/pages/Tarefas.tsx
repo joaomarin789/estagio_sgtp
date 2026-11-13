@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Plus, X } from 'lucide-react';
-import { tarefaService, usuarioService } from '../services/api';
-import type { ProjetoResumo, Tarefa, TarefaForm, Usuario } from '../types';
+import { dashboardService, mensagemErro, tarefaService, usuarioService } from '../services/api';
+import type { ProjetoResumo, Status, Tarefa, TarefaForm, Usuario } from '../types';
 import TaskCard from '../components/ui/TaskCard';
 import TarefaModal from '../components/ui/TarefaModal';
-import { emptyForm, syncTime, tarefaToForm } from '../utils/labels';
+import StatusSelect from '../components/ui/StatusSelect';
+import { emptyForm, statusLabels, syncTime, tarefaToForm } from '../utils/labels';
 
 const statusChips = [
   { val: '', label: 'Todos' },
@@ -30,7 +31,11 @@ export default function Tarefas() {
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
   const [view, setView] = useState<'timeline' | 'pipeline'>('timeline');
 
-  const [filtros, setFiltros] = useState({ busca: '', status: '', prioridade: '' });
+  // UC03 3.1 - Bloquear Tarefa: tarefa aguardando o motivo do impedimento.
+  const [bloqueio, setBloqueio] = useState<{ tarefa: Tarefa; motivo: string } | null>(null);
+
+  // inativos = listar as tarefas excluidas, para restauracao (UC02 3.4).
+  const [filtros, setFiltros] = useState({ busca: '', status: '', prioridade: '', id_projeto: '', inativos: false });
 
   const carregar = useCallback(async () => {
     setLoading(true);
@@ -40,12 +45,14 @@ export default function Tarefas() {
       if (filtros.busca) params.busca = filtros.busca;
       if (filtros.status) params.status = filtros.status;
       if (filtros.prioridade) params.prioridade = filtros.prioridade;
+      if (filtros.id_projeto) params.id_projeto = filtros.id_projeto;
+      if (filtros.inativos) params.inativos = '1';
 
       const [tarefasData, projetosData, usuariosData, dash] = await Promise.all([
         tarefaService.listar(params),
         tarefaService.projetos(),
         usuarioService.listar(),
-        tarefaService.dashboard(),
+        dashboardService.indicadores(),
       ]);
       setTarefas(tarefasData);
       setProjetos(projetosData);
@@ -60,12 +67,13 @@ export default function Tarefas() {
 
   useEffect(() => { carregar(); }, [carregar]);
 
-  const abrirCriar = () => { setEditingId(null); setForm(emptyForm); setModalOpen(true); };
-  const abrirEditar = (t: Tarefa) => { setEditingId(t.id); setForm(tarefaToForm(t)); setModalOpen(true); };
+  const abrirCriar = () => { setEditingId(null); setForm(emptyForm); setError(''); setModalOpen(true); };
+  const abrirEditar = (t: Tarefa) => { setEditingId(t.id); setForm(tarefaToForm(t)); setError(''); setModalOpen(true); };
 
   const salvar = async () => {
-    if (!form.titulo || !form.id_responsavel || !form.prazo) {
-      setError('Preencha título, responsável e prazo.');
+    // O responsavel e opcional (UC02): a tarefa pode ser cadastrada sem ele.
+    if (!form.titulo || !form.prazo || !form.projeto_id) {
+      setError('Preencha título, prazo e projeto.');
       return;
     }
     setSaving(true);
@@ -75,10 +83,59 @@ export default function Tarefas() {
       else await tarefaService.criar(form);
       setModalOpen(false);
       carregar();
-    } catch {
-      setError('Erro ao salvar tarefa.');
+    } catch (err) {
+      setError(mensagemErro(err, 'Erro ao salvar tarefa.'));
     } finally {
       setSaving(false);
+    }
+  };
+
+  // UC03 - Atualizar Andamento da Tarefa
+  const enviarStatus = async (t: Tarefa, novoStatus: Status, motivo?: string) => {
+    setError('');
+    try {
+      await tarefaService.atualizarStatus(t.id, novoStatus, motivo);
+      setBloqueio(null);
+      carregar();
+    } catch (err) {
+      // Inclui o 403 quando o usuario atual nao e o responsavel pela tarefa.
+      setError(mensagemErro(err, 'Erro ao atualizar o status da tarefa.'));
+    }
+  };
+
+  // Bloquear exige o motivo: abre o modal em vez de enviar direto.
+  const mudarStatus = (t: Tarefa, novoStatus: Status) => {
+    if (novoStatus === 'bloqueada') {
+      setError('');
+      setBloqueio({ tarefa: t, motivo: '' });
+      return;
+    }
+    enviarStatus(t, novoStatus);
+  };
+
+  const confirmarBloqueio = () => {
+    if (!bloqueio) return;
+    const motivo = bloqueio.motivo.trim();
+    if (!motivo) {
+      setError('Informe o motivo do impedimento.');
+      return;
+    }
+    enviarStatus(bloqueio.tarefa, 'bloqueada', motivo);
+  };
+
+  const fecharBloqueio = () => {
+    setBloqueio(null);
+    setError('');
+  };
+
+  // UC02 3.4 - Restaurar Tarefas
+  const restaurar = async (id: number) => {
+    setError('');
+    try {
+      await tarefaService.restaurar(id);
+      carregar();
+    } catch (err) {
+      setError(mensagemErro(err, 'Erro ao restaurar tarefa.'));
     }
   };
 
@@ -87,8 +144,8 @@ export default function Tarefas() {
       await tarefaService.excluir(id);
       setDeleteConfirm(null);
       carregar();
-    } catch {
-      setError('Erro ao excluir tarefa.');
+    } catch (err) {
+      setError(mensagemErro(err, 'Erro ao excluir tarefa.'));
     }
   };
 
@@ -151,6 +208,28 @@ export default function Tarefas() {
             ))}
           </div>
 
+          <select
+            className="search-input"
+            style={{ marginTop: 8 }}
+            value={filtros.id_projeto}
+            onChange={(e) => setFiltros({ ...filtros, id_projeto: e.target.value })}
+          >
+            <option value="">Todos os projetos</option>
+            {projetos.map((p) => (
+              <option key={p.id} value={p.id}>{p.nome}</option>
+            ))}
+          </select>
+
+          <div className="chip-group" style={{ marginTop: 8 }}>
+            <button
+              type="button"
+              className={`chip ${filtros.inativos ? 'active' : ''}`}
+              onClick={() => setFiltros({ ...filtros, inativos: !filtros.inativos })}
+            >
+              Inativas (excluídas)
+            </button>
+          </div>
+
           <div className="view-toggle">
             <button type="button" className={view === 'timeline' ? 'active' : ''} onClick={() => setView('timeline')}>Timeline</button>
             <button type="button" className={view === 'pipeline' ? 'active' : ''} onClick={() => setView('pipeline')}>Pipeline</button>
@@ -185,7 +264,9 @@ export default function Tarefas() {
           <div className="team-flow-header">
             <div>
               <div className="section-label">Timeline conectada</div>
-              <h3 style={{ fontSize: 14, fontWeight: 600 }}>Backlog operacional</h3>
+              <h3 style={{ fontSize: 14, fontWeight: 600 }}>
+                {filtros.inativos ? 'Tarefas excluídas' : 'Backlog operacional'}
+              </h3>
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
               <span className="pill red">Alta: {criticas}</span>
@@ -199,13 +280,19 @@ export default function Tarefas() {
             <div className="empty-state">Nenhuma tarefa encontrada</div>
           ) : view === 'timeline' ? (
             tarefas.map((t) => (
-              <TaskCard
-                key={t.id}
-                tarefa={t}
-                showActions
-                onEdit={abrirEditar}
-                onDelete={setDeleteConfirm}
-              />
+              // Tarefa excluida so pode ser restaurada; as demais acoes ficam ocultas.
+              filtros.inativos ? (
+                <TaskCard key={t.id} tarefa={t} showActions onRestore={restaurar} />
+              ) : (
+                <TaskCard
+                  key={t.id}
+                  tarefa={t}
+                  showActions
+                  onEdit={abrirEditar}
+                  onDelete={setDeleteConfirm}
+                  onStatusChange={mudarStatus}
+                />
+              )
             ))
           ) : (
             <div className="card">
@@ -227,13 +314,26 @@ export default function Tarefas() {
                       <tr key={t.id}>
                         <td className="code-cell">SGTP-{2800 + t.id}</td>
                         <td><strong>{t.titulo}</strong></td>
-                        <td>{t.status.replace('_', ' ')}</td>
+                        <td>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            {statusLabels[t.status]}
+                            {!filtros.inativos && (
+                              <StatusSelect status={t.status} onChange={(novo) => mudarStatus(t, novo)} />
+                            )}
+                          </div>
+                        </td>
                         <td>{t.prioridade}</td>
-                        <td>{t.responsavel}</td>
+                        <td>{t.responsavel || 'Sem responsável'}</td>
                         <td>{t.prazo.split('T')[0]}</td>
                         <td>
-                          <button type="button" className="btn-icon" onClick={() => abrirEditar(t)}>✎</button>
-                          <button type="button" className="btn-icon danger" onClick={() => setDeleteConfirm(t.id)}>✕</button>
+                          {filtros.inativos ? (
+                            <button type="button" className="btn-icon" onClick={() => restaurar(t.id)} title="Restaurar">↺</button>
+                          ) : (
+                            <>
+                              <button type="button" className="btn-icon" onClick={() => abrirEditar(t)}>✎</button>
+                              <button type="button" className="btn-icon danger" onClick={() => setDeleteConfirm(t.id)}>✕</button>
+                            </>
+                          )}
                         </td>
                       </tr>
                     ))}
@@ -252,10 +352,37 @@ export default function Tarefas() {
         projetos={projetos}
         usuarios={usuarios}
         saving={saving}
+        error={error}
         onClose={() => setModalOpen(false)}
         onSave={salvar}
         onChange={(field, value) => setForm((prev) => ({ ...prev, [field]: value }))}
       />
+
+      {bloqueio !== null && (
+        <div className="modal-overlay" onClick={fecharBloqueio}>
+          <div className="modal" style={{ maxWidth: 440 }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-head">
+              <h2>Bloquear tarefa</h2>
+              <button type="button" className="btn-icon" onClick={fecharBloqueio}><X size={18} /></button>
+            </div>
+            <div className="modal-body">
+              {error && <div className="error-banner">{error}</div>}
+              <div className="form-group full">
+                <label>Motivo do impedimento de "{bloqueio.tarefa.titulo}"</label>
+                <textarea
+                  autoFocus
+                  value={bloqueio.motivo}
+                  onChange={(e) => setBloqueio({ ...bloqueio, motivo: e.target.value })}
+                />
+              </div>
+            </div>
+            <div className="modal-foot">
+              <button type="button" className="btn btn-ghost" onClick={fecharBloqueio}>Cancelar</button>
+              <button type="button" className="btn btn-danger" onClick={confirmarBloqueio}>Bloquear</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {deleteConfirm !== null && (
         <div className="modal-overlay" onClick={() => setDeleteConfirm(null)}>
@@ -266,7 +393,8 @@ export default function Tarefas() {
             </div>
             <div className="modal-body">
               <p style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
-                Excluir esta tarefa? Ação irreversível.
+                Excluir esta tarefa? Ela deixará de aparecer nas listagens, mas o registro e o
+                histórico são mantidos e ela pode ser restaurada.
               </p>
             </div>
             <div className="modal-foot">

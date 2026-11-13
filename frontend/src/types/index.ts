@@ -7,7 +7,10 @@ export interface Tarefa {
   descricao: string | null;
   prioridade: Prioridade;
   status: Status;
-  responsavel: string;
+  /** Motivo do impedimento; so tem valor enquanto o status e 'bloqueada'. */
+  motivo_bloqueio?: string | null;
+  /** Nome do responsavel; null quando a tarefa nao tem responsavel. */
+  responsavel: string | null;
   id_responsavel: number | null;
   prazo: string;
   projeto_id: number | null;
@@ -15,11 +18,14 @@ export interface Tarefa {
   created_at?: string;
 }
 
+/**
+ * Dados editaveis da tarefa. O status nao faz parte do formulario:
+ * ele so muda pelo UC03 (PATCH /tarefas/:id/status).
+ */
 export interface TarefaForm {
   titulo: string;
   descricao: string;
   prioridade: Prioridade;
-  status: Status;
   id_responsavel: number | null;
   prazo: string;
   projeto_id: number | null;
@@ -34,6 +40,7 @@ export interface ProjetoResumo {
 export interface Usuario {
   id_usuario: number;
   nome: string;
+  perfil?: string;
 }
 
 export type StatusProjeto =
@@ -76,17 +83,18 @@ export interface DashboardStats {
   tarefas_em_andamento: number;
   tarefas_pendentes: number;
   projetos_ativos: number;
+  /** Media de dias entre criacao e conclusao; null se nao ha tarefa concluida. */
+  lead_time_medio: number | null;
   entregas_criticas: EntregaCritica[];
   pipeline: PipelineItem[];
   capacidade_equipe: CapacidadeItem[];
   atividades_recentes: Atividade[];
-  produtividade: ProdutividadeItem[];
 }
 
 export interface EntregaCritica {
   id: number;
   titulo: string;
-  responsavel: string;
+  responsavel: string | null;
   prazo: string;
   prioridade: Prioridade;
   projeto_nome: string | null;
@@ -112,12 +120,6 @@ export interface Atividade {
   usuario: string;
   tarefa_titulo?: string;
   created_at: string;
-}
-
-export interface ProdutividadeItem {
-  mes: string;
-  concluidas: number;
-  total: number;
 }
 
 export interface RelatoriosData {
