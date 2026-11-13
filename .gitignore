@@ -3,3 +3,9 @@ dist/
 .env
 *.log
 .DS_Store
+
+# Backups do banco (contem dados e hashes de senha dos usuarios)
+backup_*.sql
+
+# Cache de build do TypeScript
+*.tsbuildinfo
